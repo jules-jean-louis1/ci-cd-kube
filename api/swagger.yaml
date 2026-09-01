@@ -1,0 +1,1154 @@
+openapi: 3.0.3
+
+info:
+  title: HealthSync API
+  description: >
+    API REST de gestion des rendez-vous médicaux (HealthSync).
+    Authentification par JWT (Bearer token), obtenu via POST /auth/login.
+  version: "0.1.0"
+
+servers:
+  - url: http://localhost:3000
+    description: Environnement local de développement
+
+# Un tag par module métier, dans l'ordre où ils apparaissent dans src/index.ts
+tags:
+  - name: Auth
+    description: Inscription, connexion, rafraîchissement de session
+  - name: Patients
+    description: Gestion des comptes patients (CRUD admin/médecin, recherche par nom/email)
+  - name: Doctors
+    description: Gestion des comptes médecins (CRUD)
+  - name: Specialties
+    description: Gestion des spécialités médicales
+  - name: DoctorSchedules
+    description: Planning récurrent des médecins et créneaux disponibles (via gRPC)
+  - name: Appointments
+    description: Prise, modification, annulation et historique des rendez-vous
+
+components:
+  schemas:
+    RegisterInput:
+      type: object
+      required: [email, password, firstname, lastname, phone, date_of_birth]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 12, description: "12 caractères minimum" }
+        firstname: { type: string }
+        lastname: { type: string }
+        phone: { type: string }
+        date_of_birth: { type: string, format: date, example: "1990-05-21" }
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 12 }
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: >
+            Access token JWT (15 minutes de validité). Le refresh token est renvoyé
+            dans un cookie httpOnly, jamais dans le corps de la réponse.
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+    PatientResponse:
+      type: object
+      description: Représentation d'un patient, sans jamais inclure le hash du mot de passe.
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        firstname: { type: string }
+        lastname: { type: string }
+        phone: { type: string }
+        date_of_birth: { type: string, format: date }
+        role: { type: string, example: "patient" }
+        created_at: { type: string, format: date-time }
+    UpdatePatientInput:
+      type: object
+      description: Modification partielle — au moins un champ doit être renseigné.
+      properties:
+        email: { type: string, format: email }
+        firstname: { type: string }
+        lastname: { type: string }
+        phone: { type: string }
+        date_of_birth: { type: string, format: date }
+    DoctorInput:
+      type: object
+      required: [email, firstname, lastname, date_of_birth, phone, password]
+      properties:
+        email: { type: string, format: email }
+        firstname: { type: string, minLength: 2, maxLength: 100 }
+        lastname: { type: string, minLength: 2, maxLength: 100 }
+        date_of_birth: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', example: "1985-03-12" }
+        phone: { type: string, minLength: 10, maxLength: 15 }
+        password: { type: string, minLength: 12 }
+    UpdateDoctorInput:
+      type: object
+      description: Modification partielle — tous les champs de DoctorInput, optionnels.
+      properties:
+        email: { type: string, format: email }
+        firstname: { type: string, minLength: 2, maxLength: 100 }
+        lastname: { type: string, minLength: 2, maxLength: 100 }
+        date_of_birth: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        phone: { type: string, minLength: 10, maxLength: 15 }
+        password: { type: string, minLength: 12 }
+    DoctorSummary:
+      type: object
+      description: Représentation résumée d'un médecin (liste), sans données sensibles.
+      properties:
+        id: { type: string, format: uuid }
+        firstname: { type: string }
+        lastname: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        created_at: { type: string, format: date-time }
+    DoctorDetail:
+      type: object
+      description: >
+        Représentation détaillée d'un médecin. `date_of_birth` n'est incluse que si le
+        médecin consulte sa propre fiche (absente sinon).
+      properties:
+        id: { type: string, format: uuid }
+        firstname: { type: string }
+        lastname: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        date_of_birth: { type: string, format: date }
+        created_at: { type: string, format: date-time }
+        doctor_specialties: { type: array, items: { type: object } }
+        doctor_schedules: { type: array, items: { type: object } }
+    DoctorResponse:
+      type: object
+      description: Médecin créé ou mis à jour (sans password_hash).
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        firstname: { type: string }
+        lastname: { type: string }
+        phone: { type: string }
+        date_of_birth: { type: string, format: date }
+        role: { type: string, example: "medecin" }
+        created_at: { type: string, format: date-time }
+    SpecialtyInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+    SpecialtyResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+    DoctorScheduleInput:
+      type: object
+      required: [doctor_id, day_of_week, start_time, end_time]
+      properties:
+        doctor_id: { type: string, format: uuid }
+        day_of_week:
+          type: integer
+          minimum: 0
+          maximum: 6
+          description: "0 = dimanche, 6 = samedi"
+        start_time: { type: string, example: "09:00", description: "Format HH:MM ou HH:MM:SS" }
+        end_time: { type: string, example: "12:00" }
+        slot_duration:
+          type: integer
+          minimum: 5
+          default: 30
+          description: Durée d'un créneau en minutes
+    DoctorScheduleResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        doctor_id: { type: string, format: uuid }
+        day_of_week: { type: integer }
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time }
+        slot_duration: { type: integer }
+    ScheduleEntry:
+      type: object
+      description: Entrée de planning brute, telle que renvoyée par le service gRPC.
+      properties:
+        id: { type: integer }
+        day_of_week: { type: integer }
+        start_time: { type: string }
+        end_time: { type: string }
+        slot_duration_minutes: { type: integer }
+    AvailableSlot:
+      type: object
+      properties:
+        start_time: { type: string, format: date-time }
+        end_time: { type: string, format: date-time }
+    AppointmentInput:
+      type: object
+      required: [doctor_id, patient_id, start_at, end_at]
+      properties:
+        doctor_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        start_at: { type: string, format: date-time }
+        end_at: { type: string, format: date-time }
+    UpdateAppointmentInput:
+      type: object
+      description: Modification partielle.
+      properties:
+        start_at: { type: string, format: date-time }
+        end_at: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [scheduled, cancelled, completed]
+    AppointmentResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        doctor_id: { type: string, format: uuid }
+        patient_id: { type: string, format: uuid }
+        start_at: { type: string, format: date-time }
+        end_at: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [scheduled, cancelled, completed]
+        created_at: { type: string, format: date-time }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token JWT obtenu via POST /auth/login, à passer dans le header
+        `Authorization: Bearer <token>`.
+
+# Sécurité par défaut sur toutes les routes — chaque route publique
+# (register, login) la surchargera explicitement avec `security: []`.
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Créer un compte patient
+      description: >
+        Inscription publique. Le rôle est toujours forcé à "patient" côté serveur —
+        aucun champ "role" n'est accepté dans le body (protection contre l'élévation de privilèges).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Compte créé avec succès
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: string, example: "User created" }
+        "400":
+          description: Corps de requête invalide (échec de validation Zod)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Échec de la création (ex. email déjà utilisé)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Se connecter
+      description: >
+        Retourne un access token JWT (15 min) dans le corps de la réponse, et pose
+        un refresh token (30 jours) dans un cookie httpOnly, secure, sameSite=Strict.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Connexion réussie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "400":
+          description: Corps de requête invalide
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Email ou mot de passe incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/refresh:
+    get:
+      tags: [Auth]
+      summary: Rafraîchir la session
+      description: >
+        Utilise le refresh token présent dans le cookie httpOnly pour émettre un nouveau
+        couple access/refresh token (rotation). Ne prend aucun paramètre — le token
+        vient uniquement du cookie, jamais du corps ou d'un header.
+      security: []
+      responses:
+        "200":
+          description: Nouveau token émis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Cookie de refresh token absent ou invalide
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Refresh token révoqué ou ne correspondant pas à l'utilisateur attendu
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    get:
+      tags: [Auth]
+      summary: Se déconnecter
+      description: >
+        Révoque le refresh token courant (s'il existe) et vide le cookie associé.
+        Ne nécessite pas de Bearer token — agit uniquement sur le cookie.
+      security: []
+      responses:
+        "200":
+          description: Déconnexion effectuée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: string, example: "Logged out" }
+
+  /patients:
+    get:
+      tags: [Patients]
+      summary: Rechercher des patients par nom et/ou email
+      description: >
+        Réservé aux comptes médecin/admin. Recherche insensible à la casse, "contient"
+        (pas exact), sur prénom OU nom pour `name`, et sur l'email pour `email`.
+        Au moins un des deux paramètres est obligatoire. Résultats plafonnés à 50.
+      parameters:
+        - name: name
+          in: query
+          schema: { type: string }
+          description: Recherche sur le prénom ou le nom de famille
+        - name: email
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Liste des patients correspondant aux critères
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PatientResponse"
+        "400":
+          description: Ni "name" ni "email" fourni
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle patient non autorisé sur cette route
+
+  /patients/{id}:
+    get:
+      tags: [Patients]
+      summary: Récupérer un patient par id
+      description: Réservé aux comptes médecin/admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Patient trouvé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientResponse"
+        "400":
+          description: Id invalide (pas un UUID)
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle patient non autorisé sur cette route
+        "404":
+          description: Patient introuvable
+
+    patch:
+      tags: [Patients]
+      summary: Modifier partiellement un patient
+      description: Réservé aux comptes médecin/admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePatientInput"
+      responses:
+        "200":
+          description: Patient mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientResponse"
+        "400":
+          description: Corps de requête invalide ou vide
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle patient non autorisé sur cette route
+        "404":
+          description: Patient introuvable
+        "409":
+          description: L'email fourni est déjà utilisé par un autre compte
+
+    delete:
+      tags: [Patients]
+      summary: Supprimer un patient
+      description: >
+        Réservé aux comptes médecin/admin. Échoue si le patient a des rendez-vous
+        liés (contrainte de clé étrangère, onDelete NoAction).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Patient supprimé
+        "400":
+          description: Id invalide (pas un UUID)
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle patient non autorisé sur cette route
+        "404":
+          description: Patient introuvable
+        "409":
+          description: Le patient a des rendez-vous liés, suppression refusée
+
+  /doctor:
+    post:
+      tags: [Doctors]
+      summary: Créer un médecin
+      description: Réservé aux comptes médecin/admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorInput"
+      responses:
+        "201":
+          description: Médecin créé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctor:
+                    $ref: "#/components/schemas/DoctorResponse"
+        "400":
+          description: Corps de requête invalide
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle patient non autorisé sur cette route
+        "500":
+          description: Échec de la création
+
+  /doctors:
+    get:
+      tags: [Doctors]
+      summary: Lister les médecins
+      description: Accessible à tout utilisateur authentifié.
+      responses:
+        "200":
+          description: Liste des médecins et le nombre total
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctors:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DoctorSummary"
+                  count:
+                    type: integer
+        "401":
+          description: Token manquant ou invalide
+        "500":
+          description: Échec de la récupération
+
+  /doctor/{id}:
+    get:
+      tags: [Doctors]
+      summary: Récupérer un médecin par id
+      description: >
+        Accessible à tout utilisateur authentifié. `date_of_birth` n'est renvoyée que si
+        le médecin consulte sa propre fiche.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Médecin trouvé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctor:
+                    $ref: "#/components/schemas/DoctorDetail"
+        "401":
+          description: Token manquant ou invalide
+        "404":
+          description: Médecin introuvable
+        "500":
+          description: Échec de la récupération
+
+    put:
+      tags: [Doctors]
+      summary: Modifier un médecin
+      description: Réservé au médecin lui-même ou à un admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDoctorInput"
+      responses:
+        "200":
+          description: Médecin mis à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctor:
+                    $ref: "#/components/schemas/DoctorResponse"
+        "400":
+          description: Corps de requête invalide
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Non autorisé à modifier ce médecin
+        "404":
+          description: Médecin introuvable
+
+    delete:
+      tags: [Doctors]
+      summary: Supprimer un médecin
+      description: Réservé au médecin lui-même ou à un admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Médecin supprimé
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Non autorisé à supprimer ce médecin
+        "404":
+          description: Médecin introuvable
+
+  /specialty:
+    post:
+      tags: [Specialties]
+      summary: Créer une spécialité
+      description: Réservé aux comptes admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpecialtyInput"
+      responses:
+        "201":
+          description: Spécialité créée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  specialty:
+                    $ref: "#/components/schemas/SpecialtyResponse"
+        "400":
+          description: Corps de requête invalide
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle non autorisé (réservé admin)
+        "409":
+          description: Une spécialité avec ce nom existe déjà
+
+  /specialties:
+    get:
+      tags: [Specialties]
+      summary: Lister les spécialités
+      description: Accessible à tout utilisateur authentifié.
+      responses:
+        "200":
+          description: Liste des spécialités
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  specialties:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SpecialtyResponse"
+        "401":
+          description: Token manquant ou invalide
+        "500":
+          description: Échec de la récupération
+
+  /specialty/{id}:
+    get:
+      tags: [Specialties]
+      summary: Récupérer une spécialité par id
+      description: Accessible à tout utilisateur authentifié.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Spécialité trouvée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  specialty:
+                    $ref: "#/components/schemas/SpecialtyResponse"
+        "401":
+          description: Token manquant ou invalide
+        "404":
+          description: Spécialité introuvable
+        "500":
+          description: Échec de la récupération
+
+    put:
+      tags: [Specialties]
+      summary: Modifier une spécialité
+      description: Réservé aux comptes admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpecialtyInput"
+      responses:
+        "200":
+          description: Spécialité mise à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  specialty:
+                    $ref: "#/components/schemas/SpecialtyResponse"
+        "400":
+          description: Id invalide, corps invalide, ou aucun champ à modifier
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle non autorisé (réservé admin)
+        "404":
+          description: Spécialité introuvable
+        "409":
+          description: Une spécialité avec ce nom existe déjà
+
+    delete:
+      tags: [Specialties]
+      summary: Supprimer une spécialité
+      description: Réservé aux comptes admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Spécialité supprimée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  specialty:
+                    $ref: "#/components/schemas/SpecialtyResponse"
+        "400":
+          description: Id invalide
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle non autorisé (réservé admin)
+        "404":
+          description: Spécialité introuvable
+
+  /doctor/{doctorId}/schedules:
+    get:
+      tags: [DoctorSchedules]
+      summary: Lister le planning récurrent d'un médecin
+      description: Accessible à tout utilisateur authentifié.
+      parameters:
+        - name: doctorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Planning du médecin
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedules:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/DoctorScheduleResponse"
+        "401":
+          description: Token manquant ou invalide
+        "404":
+          description: doctorId manquant
+        "500":
+          description: Échec de la récupération
+
+  /doctor-schedules:
+    post:
+      tags: [DoctorSchedules]
+      summary: Créer une entrée de planning
+      description: Réservé aux comptes médecin/admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorScheduleInput"
+      responses:
+        "201":
+          description: Planning créé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedule:
+                    $ref: "#/components/schemas/DoctorScheduleResponse"
+        "400":
+          description: Corps invalide, ou médecin inexistant (contrainte de clé étrangère)
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle patient non autorisé sur cette route
+
+  /doctor-schedules/{id}:
+    put:
+      tags: [DoctorSchedules]
+      summary: Modifier une entrée de planning
+      description: Réservé aux comptes médecin/admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DoctorScheduleInput"
+      responses:
+        "200":
+          description: Planning mis à jour
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedule:
+                    $ref: "#/components/schemas/DoctorScheduleResponse"
+        "400":
+          description: Id invalide ou corps invalide
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle patient non autorisé sur cette route
+        "404":
+          description: Planning introuvable
+
+    delete:
+      tags: [DoctorSchedules]
+      summary: Supprimer une entrée de planning
+      description: Réservé aux comptes médecin/admin.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Planning supprimé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Schedule deleted successfully" }
+                  schedule:
+                    $ref: "#/components/schemas/DoctorScheduleResponse"
+        "400":
+          description: Id invalide
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Rôle patient non autorisé sur cette route
+        "404":
+          description: Planning introuvable
+
+  /doctors/slots/{doctorId}:
+    get:
+      tags: [DoctorSchedules]
+      summary: Récupérer le planning brut d'un médecin (via gRPC)
+      description: >
+        Malgré le nom de la route, renvoie le planning récurrent brut
+        (GetDoctorSchedule côté gRPC), pas les créneaux réellement disponibles —
+        utiliser /doctor/{doctorId}/available-slots pour la disponibilité réelle.
+      parameters:
+        - name: doctorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Planning brut renvoyé par le service gRPC
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schedules:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ScheduleEntry"
+        "400":
+          description: doctorId ou date manquant
+        "401":
+          description: Token manquant ou invalide
+        "500":
+          description: Échec de la communication avec le service gRPC
+
+  /doctor/{doctorId}/available-slots:
+    get:
+      tags: [DoctorSchedules]
+      summary: Récupérer les créneaux réellement disponibles d'un médecin (via gRPC)
+      description: >
+        Calcule les créneaux disponibles en croisant le planning récurrent et les
+        rendez-vous déjà pris (RPC GetDoctorAvailableSlots côté service gRPC).
+      parameters:
+        - name: doctorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Créneaux disponibles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctor_id: { type: string, format: uuid }
+                  date: { type: string, format: date }
+                  available_slots:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AvailableSlot"
+        "400":
+          description: Paramètre "date" manquant
+        "401":
+          description: Token manquant ou invalide
+        "500":
+          description: Échec de la communication avec le service gRPC
+
+  /appointments:
+    post:
+      tags: [Appointments]
+      summary: Prendre un rendez-vous
+      description: >
+        Un patient ne peut réserver que pour lui-même (403 sinon). Vérifie que la
+        durée respecte le slot_duration du planning du médecin, et l'absence de
+        conflit avec un rendez-vous existant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentInput"
+      responses:
+        "201":
+          description: Rendez-vous créé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+        "400":
+          description: Corps invalide, ou durée dépassant le slot_duration du médecin
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Un patient tente de réserver pour un autre patient
+        "409":
+          description: Créneau déjà occupé
+        "500":
+          description: Échec de la création
+
+    get:
+      tags: [Appointments]
+      summary: Lister mes rendez-vous (ou ceux d'un patient donné pour un médecin/admin)
+      description: >
+        Un patient voit toujours ses propres rendez-vous. Un médecin/admin peut
+        cibler un patient via `?patient_id=`.
+      parameters:
+        - name: patient_id
+          in: query
+          schema: { type: string, format: uuid }
+          description: Ignoré si l'appelant est un patient (toujours ses propres RDV)
+      responses:
+        "200":
+          description: Liste des rendez-vous
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppointmentResponse"
+        "400":
+          description: patient_id manquant (requis pour un appelant non-patient)
+        "401":
+          description: Token manquant ou invalide
+        "500":
+          description: Échec de la récupération
+
+  /appointments/{id}:
+    get:
+      tags: [Appointments]
+      summary: Récupérer un rendez-vous par id
+      description: Un patient ne peut consulter que ses propres rendez-vous.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Rendez-vous trouvé
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+        "400":
+          description: Id manquant
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Un patient tente de consulter le rendez-vous d'un autre patient
+        "404":
+          description: Rendez-vous introuvable
+        "500":
+          description: Échec de la récupération
+
+    patch:
+      tags: [Appointments]
+      summary: Modifier un rendez-vous
+      description: >
+        Un patient ne peut modifier que ses propres rendez-vous. Si la date/heure
+        change, revérifie l'absence de conflit.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentInput"
+      responses:
+        "200":
+          description: Rendez-vous mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentResponse"
+        "400":
+          description: Id manquant ou corps invalide
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Un patient tente de modifier le rendez-vous d'un autre patient
+        "404":
+          description: Rendez-vous introuvable
+        "409":
+          description: Nouveau créneau déjà occupé
+        "500":
+          description: Échec de la mise à jour
+
+    delete:
+      tags: [Appointments]
+      summary: Annuler un rendez-vous
+      description: Un patient ne peut annuler que ses propres rendez-vous.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Rendez-vous annulé
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "Appointment cancelled successfully" }
+        "400":
+          description: Id manquant
+        "401":
+          description: Token manquant ou invalide
+        "403":
+          description: Un patient tente d'annuler le rendez-vous d'un autre patient
+        "404":
+          description: Rendez-vous introuvable
+        "500":
+          description: Échec de l'annulation
+
+  /appointments/doctor/{doctorId}:
+    get:
+      tags: [Appointments]
+      summary: Lister les rendez-vous d'un médecin
+      description: >
+        ⚠️ Aucune restriction de rôle ni vérification de propriété au-delà de
+        l'authentification — tout utilisateur authentifié peut consulter les
+        rendez-vous de n'importe quel médecin (point relevé pour le rapport OWASP, #17).
+      parameters:
+        - name: doctorId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+          description: "Optionnel — filtre sur une journée précise (YYYY-MM-DD)"
+      responses:
+        "200":
+          description: Liste des rendez-vous du médecin
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppointmentResponse"
+        "400":
+          description: doctorId manquant
+        "401":
+          description: Token manquant ou invalide
+        "500":
+          description: Échec de la récupération
+
+  /appointments/history:
+    get:
+      tags: [Appointments]
+      summary: Consulter l'historique des rendez-vous
+      description: >
+        Un patient voit toujours son propre historique. Un médecin/admin peut
+        cibler un patient via `?patient_id=`.
+      parameters:
+        - name: patient_id
+          in: query
+          schema: { type: string, format: uuid }
+          description: Ignoré si l'appelant est un patient (toujours son propre historique)
+      responses:
+        "200":
+          description: Historique des rendez-vous, du plus récent au plus ancien
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppointmentResponse"
+        "400":
+          description: patient_id manquant (requis pour un appelant non-patient)
+        "401":
+          description: Token manquant ou invalide
+        "500":
+          description: Échec de la récupération

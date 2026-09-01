@@ -1,0 +1,92 @@
+services:
+  database:
+    image: postgres:17.2-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-healthsync}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-healthsync}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    networks:
+      - healthsync
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - healthsync_data:/var/lib/postgresql/data
+      - ../database/:/docker-entrypoint-initdb.d/:ro
+  
+  database-test:
+    image: postgres:17.2-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_TEST:-healthsync_test}
+      POSTGRES_USER: ${POSTGRES_USER_TEST:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_TEST:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_TEST:-healthsync_test}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    networks:
+      - healthsync
+    ports:
+      - "${POSTGRES_PORT_TEST:-5434}:5432"
+    volumes:
+      - healthsync_data_test:/var/lib/postgresql/data
+      - ../database/:/docker-entrypoint-initdb.d/:ro
+
+  api:
+    build:
+      context: ../api/
+      dockerfile: Dockerfile
+    depends_on:
+      database:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}?schema=public
+    ports:
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      - ../api:/usr/src/app
+      - api_node_modules:/usr/src/app/node_modules
+      - ../grpc-service/proto:/usr/src/app/proto
+    networks:
+      - healthsync
+
+  grpc-service:
+    build:
+      context: ../grpc-service/
+      dockerfile: Dockerfile
+    depends_on:
+      database:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}?schema=public
+      GRPC_PORT: 50051
+    ports:
+      - "${GRPC_PORT:-50051}:50051"
+    volumes:
+      - ../grpc-service:/usr/src/app
+      - grpc_service_node_modules:/usr/src/app/node_modules
+    networks:
+      - healthsync
+
+networks:
+  healthsync:
+    driver: bridge
+
+volumes:
+  healthsync_data:
+  api_node_modules:
+  healthsync_data_test:
+  grpc_service_node_modules:

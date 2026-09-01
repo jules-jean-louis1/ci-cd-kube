@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package healthsync.schedules;
+
+service ScheduleService {
+  // Planning récurrent hebdomadaire d'un médecin
+  rpc GetDoctorSchedule(GetDoctorScheduleRequest) returns (GetDoctorScheduleResponse);
+  
+  // Créneaux disponibles d'un médecin pour une date donnée
+  rpc GetDoctorAvailableSlots(GetDoctorAvailableSlotsRequest) returns (GetDoctorAvailableSlotsResponse);
+}
+
+message GetDoctorAvailableSlotsRequest {
+  string doctor_id = 1;
+  string date = 2;
+}
+
+message AvailableSlot {
+  string start_time = 1;
+  string end_time = 2;
+}
+
+message GetDoctorAvailableSlotsResponse {
+  string doctor_id = 1;
+  string date = 2;                  
+  repeated AvailableSlot available_slots = 3;
+}
+
+message GetDoctorScheduleRequest {
+  string doctor_id = 1;
+}
+
+message ScheduleEntry {
+  int32 id = 1;
+  int32 day_of_week = 2;            
+  string start_time = 3;            
+  string end_time = 4;              
+  int32 slot_duration_minutes = 5;
+}
+
+message GetDoctorScheduleResponse {
+  repeated ScheduleEntry schedules = 1;
+}
