@@ -1,0 +1,107 @@
+# name: build, test and deploy
+
+# on:
+#   push:
+#     branches:
+#       - main
+#     tags:
+#       - "**"
+#   pull_request:
+#     branches:
+#       - main
+
+# jobs:
+#   deps_leak:
+#     defaults:
+#       run:
+#         shell: bash
+#         working-directory: api
+
+#     runs-on: ubuntu-24.04
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v6
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 22
+#           cache: npm
+#           cache-dependency-path: api/package-lock.json
+
+#       - name: Install dependencies
+#         run: npm ci
+
+#       - name: Check dependencies
+#         run: npm audit
+
+#       - name: Run Gitleaks
+#         uses: gitleaks/gitleaks-action@v2
+
+#   format_lint:
+#     needs: deps_leak
+#     defaults:
+#       run:
+#         working-directory: api
+
+#     runs-on: ubuntu-24.04
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v6
+
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 22
+#           cache: npm
+#           cache-dependency-path: api/package-lock.json
+
+#       - name: Install dependencies
+#         run: npm ci
+
+#       - name: Format
+#         run: npm run format:check
+
+#       - name: Lint
+#         run: npm run lint
+
+#       - name: TypeCheck
+#         run: npm run typecheck
+
+#   test_api:
+#     needs: [deps_leak, format_lint]
+#     runs-on: ubuntu-24.04
+
+#     services:
+#       postgres:
+#         image: postgres:17.2-alpine
+#         env:
+#           POSTGRES_DB: healthsync_test
+#           POSTGRES_USER: postgres
+#           POSTGRES_PASSWORD: postgres
+#         ports:
+#           - 5434:5432
+#         options: >-
+#           --health-cmd "pg_isready -U postgres -d healthsync_test"
+#           --health-interval 10s
+#           --health-timeout 5s
+#           --health-retries 5
+#         volumes:
+#           - ${{ github.workspace }}/database/:/docker-entrypoint-initdb.d/:ro
+
+#     defaults:
+#       run:
+#         working-directory: api
+
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v6
+
+#       - name: Install dependencies
+#         run: npm ci
+
+#       - name: Init Prisma Client
+#         run: npm run prisma:generate
+
+#       - name: Run test
+#         run: npm run test
