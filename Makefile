@@ -113,6 +113,9 @@ test-watch: # Lance les tests en mode surveillance, ciblés ou non (ex: make tes
 
 test-coverage: # Lance les tests avec couverture de code et génère un rapport
 	@cd api && npm run test:coverage
+
+test-coverage-brut: # Lance les tests directement dans api (sans dotenv wrapper)
+	@cd api && npx vitest run --coverage
 	
 # --- Aide ---
 
