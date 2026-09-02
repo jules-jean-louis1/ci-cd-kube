@@ -1,3 +1,40 @@
+FROM node:22-bookworm-slim AS base
+
+WORKDIR /usr/src/app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dumb-init \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN chown node:node /usr/src/app
+
+
+FROM base AS development
+
+ENV NODE_ENV=development
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+USER node
+
+COPY --chown=node:node package.json package-lock.json ./
+
+RUN npm ci
+
+COPY --chown=node:node . .
+
+RUN npx prisma generate
+
+EXPOSE 3000
+
+ENTRYPOINT ["dumb-init", "--"]
+
+CMD ["npm", "run", "dev"]
+
+
 FROM node:22-bookworm-slim AS dependencies
 
 WORKDIR /usr/src/app
@@ -10,6 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY package.json package-lock.json ./
 
 RUN npm ci
+
 
 FROM dependencies AS build
 
