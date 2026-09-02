@@ -86,7 +86,7 @@ clean: # Nettoie Docker en supprimant les images, conteneurs et réseaux inutili
 
 lint: # Lance le linter pour vérifier la qualité du code
 	@cd api && npm run lint
-	@cd grpc-service && npm run lint
+	@echo "Skipping optional service lint (no extra services)."
 
 prisma-generate: # Génère le client Prisma localement
 	@cd api && npm run prisma:generate

@@ -74,7 +74,7 @@ RUN npm ci --omit=dev
 FROM gcr.io/distroless/nodejs22-debian12:nonroot AS production
 
 LABEL \
-    org.opencontainers.image.title="api_healthsync" \
+    org.opencontainers.image.title="api_taskmanager" \
     org.opencontainers.image.licenses="MIT"
 
 ENV NODE_ENV=production

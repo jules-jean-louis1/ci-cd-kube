@@ -1,11 +1,7 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import * as AuthController from "./modules/auth/auth.controller.js";
-import * as DoctorController from "./modules/doctors/doctors.controller.js";
-import * as PatientsController from "./modules/patients/patients.controller.js";
-import * as SpecialtyController from "./modules/specialties/specialties.controller.js";
-import * as DoctorScheduleController from "./modules/doctors_schedules/doctor_schedules.controller.js";
-import * as AppointmentController from "./modules/appointments/appointments.controller.js";
+import * as TasksController from "./modules/tasks/tasks.controller.js";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
 import { USER_ROLE } from "./utils/user.js";
@@ -71,108 +67,12 @@ app.get("/auth/refresh", async (c) => {
 });
 
 // Protect routes
-
-// Patient
-// Réservé aux comptes admin et medecin — un patient ne peut pas gérer
-// d'autres comptes patients via ces routes.
-
-app.get("/patients", auth([USER_ROLE.DOCTOR, USER_ROLE.ADMIN]), async (c) => {
-  return PatientsController.searchPatients(c);
-});
-
-app.get("/patients/:id", auth([USER_ROLE.DOCTOR, USER_ROLE.ADMIN]), async (c) => {
-  return PatientsController.getPatient(c);
-});
-
-app.patch("/patients/:id", auth([USER_ROLE.DOCTOR, USER_ROLE.ADMIN]), async (c) => {
-  return PatientsController.updatePatient(c);
-});
-
-app.delete("/patients/:id", auth([USER_ROLE.DOCTOR, USER_ROLE.ADMIN]), async (c) => {
-  return PatientsController.deletePatient(c);
-});
-
-// Doctor
-// Réservé aux comptes admin et medecin — un medecin ne peut pas gérer
-// d'autres comptes medecins via ces routes.
-
-app.post("/doctor", auth([USER_ROLE.DOCTOR, USER_ROLE.ADMIN]), async (c) => {
-  return DoctorController.createDoctor(c);
-});
-
-app.get("/doctors", auth(), async (c) => {
-  return DoctorController.getDoctors(c);
-});
-
-app.get("/doctor/:id", auth(), async (c) => {
-  return DoctorController.getDoctorById(c);
-});
-
-app.put("/doctor/:id", auth([USER_ROLE.DOCTOR, USER_ROLE.ADMIN]), async (c) => {
-  return DoctorController.updateDoctor(c);
-});
-
-app.delete("/doctor/:id", auth([USER_ROLE.DOCTOR, USER_ROLE.ADMIN]), async (c) => {
-  return DoctorController.deleteDoctor(c);
-});
-
-app.get("/doctor/:doctorId/available-slots", auth(), async (c) => {
-  return DoctorScheduleController.getAvailableSlots(c);
-});
-
-app.get("/doctors/slots/:doctorId", auth(), async (c) => {
-  return DoctorScheduleController.getSlotsByDoctorId(c);
-});
-
-// Specialties
-app.get("/specialties", auth(), async (c) => {
-  return SpecialtyController.getSpecialties(c);
-});
-
-app.get("/specialty/:id", auth(), async (c) => {
-  return SpecialtyController.getSpecialtyById(c);
-});
-
-app.post("/specialty", auth([USER_ROLE.ADMIN]), async (c) => {
-  return SpecialtyController.createSpecialty(c);
-});
-
-app.put("/specialty/:id", auth([USER_ROLE.ADMIN]), async (c) => {
-  return SpecialtyController.updateSpecialty(c);
-});
-
-app.delete("/specialty/:id", auth([USER_ROLE.ADMIN]), async (c) => {
-  return SpecialtyController.deleteSpecialty(c);
-});
-
-// Doctor Schedules
-app.get("/doctor/:doctorId/schedules", auth(), async (c) => {
-  return DoctorScheduleController.getSchedulesByDoctor(c);
-});
-
-app.post("/doctor-schedules", auth([USER_ROLE.ADMIN, USER_ROLE.DOCTOR]), async (c) => {
-  return DoctorScheduleController.createSchedule(c);
-});
-
-app.put("/doctor-schedules/:id", auth([USER_ROLE.ADMIN, USER_ROLE.DOCTOR]), async (c) => {
-  return DoctorScheduleController.updateSchedule(c);
-});
-
-app.delete("/doctor-schedules/:id", auth([USER_ROLE.ADMIN, USER_ROLE.DOCTOR]), async (c) => {
-  return DoctorScheduleController.deleteSchedule(c);
-});
-
-// Appointments
-app.get("/appointments/history", auth(), (c) => AppointmentController.getHistory(c));
-app.get("/appointments/doctor/:doctorId", auth([USER_ROLE.DOCTOR, USER_ROLE.ADMIN]), (c) =>
-  AppointmentController.getAppointmentsByDoctor(c),
-);
-
-app.post("/appointments", auth(), (c) => AppointmentController.createAppointment(c));
-app.patch("/appointments/:id", auth(), (c) => AppointmentController.updateAppointment(c));
-app.get("/appointments", auth(), (c) => AppointmentController.getAppointmentsByPatient(c));
-app.get("/appointments/:id", auth(), (c) => AppointmentController.getAppointmentById(c));
-app.delete("/appointments/:id", auth(), (c) => AppointmentController.deleteAppointment(c));
+// Tasks (Task manager)
+app.post("/tasks", auth(), async (c) => TasksController.createTask(c));
+app.get("/tasks", auth(), async (c) => TasksController.getTasks(c));
+app.get("/tasks/:id", auth(), async (c) => TasksController.getTask(c));
+app.patch("/tasks/:id", auth(), async (c) => TasksController.updateTask(c));
+app.delete("/tasks/:id", auth(), async (c) => TasksController.deleteTask(c));
 
 export default app;
 

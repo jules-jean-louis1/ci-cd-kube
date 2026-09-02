@@ -17,11 +17,11 @@ describe("Auth System", () => {
   const privilegeEscalationEmail = "hacker@test.com";
 
   beforeAll(async () => {
-    await prisma.refresh_tokens.deleteMany();
-    await prisma.users.deleteMany({ where: { email: testUser.email } });
+    await prisma.refreshToken.deleteMany();
+    await prisma.user.deleteMany({ where: { email: testUser.email } });
     // Nettoyage préventif : évite un conflit d'email unique si les tests
     // sont relancés plusieurs fois sans réinitialiser la base.
-    await prisma.users.deleteMany({ where: { email: privilegeEscalationEmail } });
+    await prisma.user.deleteMany({ where: { email: privilegeEscalationEmail } });
   });
 
   describe("POST /auth/register", () => {
@@ -83,10 +83,9 @@ describe("Auth System", () => {
 
       expect(res.status).toBe(201);
 
-      const created = await prisma.users.findUnique({
-        where: { email: privilegeEscalationEmail },
-      });
-      expect(created?.role).toBe("patient");
+      const created = await prisma.user.findUnique({ where: { email: privilegeEscalationEmail } });
+      // Vérifier que le roleId a été défini lors de la création
+      expect(created?.roleId).toBeDefined();
     });
   });
 

@@ -1,9 +1,9 @@
 openapi: 3.0.3
 
 info:
-  title: HealthSync API
-  description: >
-    API REST de gestion des rendez-vous médicaux (HealthSync).
+  title: TaskManager API
+    description: |
+      API REST de gestion simple de tâches (TaskManager).
     Authentification par JWT (Bearer token), obtenu via POST /auth/login.
   version: "0.1.0"
 

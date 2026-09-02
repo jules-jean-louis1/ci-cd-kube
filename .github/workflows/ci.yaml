@@ -60,10 +60,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install grpc-service dependencies
-        run: npm ci
-        working-directory: grpc-service
-
       - name: Format
         run: npm run format:check
 
@@ -81,13 +77,13 @@ jobs:
       postgres:
         image: postgres:17.2-alpine
         env:
-          POSTGRES_DB: healthsync_test
+          POSTGRES_DB: taskmanager_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
           - 5434:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d healthsync_test"
+          --health-cmd "pg_isready -U postgres -d taskmanager_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -103,32 +99,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install grpc-service dependencies
-        run: npm ci
-        working-directory: grpc-service
-
       - name: Create test env file
         run: |
           cat <<EOF > ../docker/.env.test
-          DATABASE_URL=postgresql://postgres:postgres@localhost:5434/healthsync_test?schema=public
+          DATABASE_URL=postgresql://postgres:postgres@localhost:5434/taskmanager_test?schema=public
           JWT_SECRET=ci-only-test-secret-not-for-production
           EOF
 
-      - name: Init Prisma Client (api & grpc-service)
+      - name: Init Prisma Client
         run: |
           npm run prisma:generate
-          cd ../grpc-service && npm run prisma:generate || true
 
       - name: Run SQL init script
         run: |
-          PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d healthsync_test -f ../database/init.sql
-
-      - name: Start gRPC Service
-        run: |
-          npm run dev &
-        working-directory: grpc-service
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5434/healthsync_test?schema=public
+          PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d taskmanager_test -f ../database/init.sql
 
       - name: Run tests with coverage
         run: npm run test:coverage
@@ -161,7 +145,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/healthsync-api
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager-api
 
       - name: Build Docker image for security scan
         uses: docker/build-push-action@v6
@@ -170,13 +154,13 @@ jobs:
           file: ./api/Dockerfile
           target: production
           load: true
-          tags: healthsync-api:local
+          tags: taskmanager-api:local
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: healthsync-api:local
+          image-ref: taskmanager-api:local
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
@@ -196,6 +180,6 @@ jobs:
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/healthsync-api
+          subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/taskmanager-api
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
