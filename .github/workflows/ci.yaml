@@ -86,8 +86,6 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        volumes:
-          - ${{ github.workspace }}/database/:/docker-entrypoint-initdb.d/:ro
 
     defaults:
       run:
@@ -113,6 +111,10 @@ jobs:
 
       - name: Init Prisma Client
         run: npm run prisma:generate
+
+      - name: Run SQL init script
+        run: |
+          PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d healthsync_test -f ../database/init.sql
 
       - name: Run tests with coverage
         run: npm run test:coverage
