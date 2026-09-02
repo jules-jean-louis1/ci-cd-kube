@@ -103,6 +103,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install grpc-service dependencies
+        run: npm ci
+        working-directory: grpc-service
+
       - name: Create test env file
         run: |
           cat <<EOF > ../docker/.env.test
@@ -110,12 +114,21 @@ jobs:
           JWT_SECRET=ci-only-test-secret-not-for-production
           EOF
 
-      - name: Init Prisma Client
-        run: npm run prisma:generate
+      - name: Init Prisma Client (api & grpc-service)
+        run: |
+          npm run prisma:generate
+          cd ../grpc-service && npm run prisma:generate || true
 
       - name: Run SQL init script
         run: |
           PGPASSWORD=postgres psql -h localhost -p 5434 -U postgres -d healthsync_test -f ../database/init.sql
+
+      - name: Start gRPC Service
+        run: |
+          npm run dev &
+        working-directory: grpc-service
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5434/healthsync_test?schema=public
 
       - name: Run tests with coverage
         run: npm run test:coverage
