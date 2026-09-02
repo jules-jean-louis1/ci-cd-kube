@@ -13,7 +13,10 @@ export const createTask = async (userId: string, data: CreateTaskInput) => {
 };
 
 export const getTasksByUser = async (userId: string) => {
-  return prisma.task.findMany({ where: { userId: Number(userId) }, orderBy: { createdAt: "desc" } });
+  return prisma.task.findMany({
+    where: { userId: Number(userId) },
+    orderBy: { createdAt: "desc" },
+  });
 };
 
 export const getAllTasks = async () => {

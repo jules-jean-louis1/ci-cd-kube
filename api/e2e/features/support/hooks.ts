@@ -1,5 +1,5 @@
-import { Before, After } from '@cucumber/cucumber';
-import { prisma } from '../../../src/utils/prisma.js';
+import { Before, After } from "@cucumber/cucumber";
+import { prisma } from "../../../src/utils/prisma.js";
 
 Before(async () => {
   await prisma.refreshToken.deleteMany();

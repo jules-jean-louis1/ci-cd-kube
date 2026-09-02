@@ -4,7 +4,6 @@ import * as AuthController from "./modules/auth/auth.controller.js";
 import * as TasksController from "./modules/tasks/tasks.controller.js";
 import { logger } from "hono/logger";
 import { secureHeaders } from "hono/secure-headers";
-import { USER_ROLE } from "./utils/user.js";
 import { auth } from "./middleware/auth.middleware.js";
 import { rateLimit } from "./middleware/rateLimit.middleware.js";
 import { createMiddleware } from "hono/factory";

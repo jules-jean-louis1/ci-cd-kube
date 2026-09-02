@@ -2,8 +2,8 @@ openapi: 3.0.3
 
 info:
   title: TaskManager API
-    description: |
-      API REST de gestion simple de tâches (TaskManager).
+  description: |
+    API REST de gestion simple de tâches (TaskManager).
     Authentification par JWT (Bearer token), obtenu via POST /auth/login.
   version: "0.1.0"
 
@@ -11,209 +11,76 @@ servers:
   - url: http://localhost:3000
     description: Environnement local de développement
 
-# Un tag par module métier, dans l'ordre où ils apparaissent dans src/index.ts
 tags:
   - name: Auth
     description: Inscription, connexion, rafraîchissement de session
-  - name: Patients
-    description: Gestion des comptes patients (CRUD admin/médecin, recherche par nom/email)
-  - name: Doctors
-    description: Gestion des comptes médecins (CRUD)
-  - name: Specialties
-    description: Gestion des spécialités médicales
-  - name: DoctorSchedules
-    description: Planning récurrent des médecins et créneaux disponibles (via gRPC)
-  - name: Appointments
-    description: Prise, modification, annulation et historique des rendez-vous
+  - name: Tasks
+    description: Création, lecture, modification et suppression de tâches
 
 components:
   schemas:
     RegisterInput:
       type: object
-      required: [email, password, firstname, lastname, phone, date_of_birth]
+      required: [email, password, firstname, lastname]
       properties:
         email: { type: string, format: email }
-        password: { type: string, minLength: 12, description: "12 caractères minimum" }
+        password: { type: string, minLength: 8 }
         firstname: { type: string }
         lastname: { type: string }
-        phone: { type: string }
-        date_of_birth: { type: string, format: date, example: "1990-05-21" }
     LoginInput:
       type: object
       required: [email, password]
       properties:
         email: { type: string, format: email }
-        password: { type: string, minLength: 12 }
+        password: { type: string }
     TokenResponse:
       type: object
       properties:
         token:
           type: string
           description: >
-            Access token JWT (15 minutes de validité). Le refresh token est renvoyé
+            Access token JWT (court terme). Le refresh token est renvoyé
             dans un cookie httpOnly, jamais dans le corps de la réponse.
     ErrorResponse:
       type: object
       properties:
         error:
           type: string
-    PatientResponse:
-      type: object
-      description: Représentation d'un patient, sans jamais inclure le hash du mot de passe.
-      properties:
-        id: { type: string, format: uuid }
-        email: { type: string, format: email }
-        firstname: { type: string }
-        lastname: { type: string }
-        phone: { type: string }
-        date_of_birth: { type: string, format: date }
-        role: { type: string, example: "patient" }
-        created_at: { type: string, format: date-time }
-    UpdatePatientInput:
-      type: object
-      description: Modification partielle — au moins un champ doit être renseigné.
-      properties:
-        email: { type: string, format: email }
-        firstname: { type: string }
-        lastname: { type: string }
-        phone: { type: string }
-        date_of_birth: { type: string, format: date }
-    DoctorInput:
-      type: object
-      required: [email, firstname, lastname, date_of_birth, phone, password]
-      properties:
-        email: { type: string, format: email }
-        firstname: { type: string, minLength: 2, maxLength: 100 }
-        lastname: { type: string, minLength: 2, maxLength: 100 }
-        date_of_birth: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', example: "1985-03-12" }
-        phone: { type: string, minLength: 10, maxLength: 15 }
-        password: { type: string, minLength: 12 }
-    UpdateDoctorInput:
-      type: object
-      description: Modification partielle — tous les champs de DoctorInput, optionnels.
-      properties:
-        email: { type: string, format: email }
-        firstname: { type: string, minLength: 2, maxLength: 100 }
-        lastname: { type: string, minLength: 2, maxLength: 100 }
-        date_of_birth: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
-        phone: { type: string, minLength: 10, maxLength: 15 }
-        password: { type: string, minLength: 12 }
-    DoctorSummary:
-      type: object
-      description: Représentation résumée d'un médecin (liste), sans données sensibles.
-      properties:
-        id: { type: string, format: uuid }
-        firstname: { type: string }
-        lastname: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
-        created_at: { type: string, format: date-time }
-    DoctorDetail:
-      type: object
-      description: >
-        Représentation détaillée d'un médecin. `date_of_birth` n'est incluse que si le
-        médecin consulte sa propre fiche (absente sinon).
-      properties:
-        id: { type: string, format: uuid }
-        firstname: { type: string }
-        lastname: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
-        date_of_birth: { type: string, format: date }
-        created_at: { type: string, format: date-time }
-        doctor_specialties: { type: array, items: { type: object } }
-        doctor_schedules: { type: array, items: { type: object } }
-    DoctorResponse:
-      type: object
-      description: Médecin créé ou mis à jour (sans password_hash).
-      properties:
-        id: { type: string, format: uuid }
-        email: { type: string, format: email }
-        firstname: { type: string }
-        lastname: { type: string }
-        phone: { type: string }
-        date_of_birth: { type: string, format: date }
-        role: { type: string, example: "medecin" }
-        created_at: { type: string, format: date-time }
-    SpecialtyInput:
-      type: object
-      required: [name]
-      properties:
-        name: { type: string, minLength: 1, maxLength: 255 }
-    SpecialtyResponse:
+    UserResponse:
       type: object
       properties:
         id: { type: integer }
-        name: { type: string }
-    DoctorScheduleInput:
-      type: object
-      required: [doctor_id, day_of_week, start_time, end_time]
-      properties:
-        doctor_id: { type: string, format: uuid }
-        day_of_week:
-          type: integer
-          minimum: 0
-          maximum: 6
-          description: "0 = dimanche, 6 = samedi"
-        start_time: { type: string, example: "09:00", description: "Format HH:MM ou HH:MM:SS" }
-        end_time: { type: string, example: "12:00" }
-        slot_duration:
-          type: integer
-          minimum: 5
-          default: 30
-          description: Durée d'un créneau en minutes
-    DoctorScheduleResponse:
-      type: object
-      properties:
-        id: { type: integer }
-        doctor_id: { type: string, format: uuid }
-        day_of_week: { type: integer }
-        start_time: { type: string, format: date-time }
-        end_time: { type: string, format: date-time }
-        slot_duration: { type: integer }
-    ScheduleEntry:
-      type: object
-      description: Entrée de planning brute, telle que renvoyée par le service gRPC.
-      properties:
-        id: { type: integer }
-        day_of_week: { type: integer }
-        start_time: { type: string }
-        end_time: { type: string }
-        slot_duration_minutes: { type: integer }
-    AvailableSlot:
-      type: object
-      properties:
-        start_time: { type: string, format: date-time }
-        end_time: { type: string, format: date-time }
-    AppointmentInput:
-      type: object
-      required: [doctor_id, patient_id, start_at, end_at]
-      properties:
-        doctor_id: { type: string, format: uuid }
-        patient_id: { type: string, format: uuid }
-        start_at: { type: string, format: date-time }
-        end_at: { type: string, format: date-time }
-    UpdateAppointmentInput:
-      type: object
-      description: Modification partielle.
-      properties:
-        start_at: { type: string, format: date-time }
-        end_at: { type: string, format: date-time }
-        status:
-          type: string
-          enum: [scheduled, cancelled, completed]
-    AppointmentResponse:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        doctor_id: { type: string, format: uuid }
-        patient_id: { type: string, format: uuid }
-        start_at: { type: string, format: date-time }
-        end_at: { type: string, format: date-time }
-        status:
-          type: string
-          enum: [scheduled, cancelled, completed]
+        email: { type: string, format: email }
+        firstname: { type: string }
+        lastname: { type: string }
+        role: { type: string }
         created_at: { type: string, format: date-time }
+    TaskInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        due_date: { type: string, format: date-time }
+        completed: { type: boolean, default: false }
+    TaskResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        due_date: { type: string, format: date-time }
+        completed: { type: boolean }
+        user_id: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    UpdateTaskInput:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        due_date: { type: string, format: date-time }
+        completed: { type: boolean }
   securitySchemes:
     bearerAuth:
       type: http
@@ -221,10 +88,8 @@ components:
       bearerFormat: JWT
       description: >
         Token JWT obtenu via POST /auth/login, à passer dans le header
-        `Authorization: Bearer <token>`.
+        Authorization: Bearer <token>.
 
-# Sécurité par défaut sur toutes les routes — chaque route publique
-# (register, login) la surchargera explicitement avec `security: []`.
 security:
   - bearerAuth: []
 
@@ -232,10 +97,8 @@ paths:
   /auth/register:
     post:
       tags: [Auth]
-      summary: Créer un compte patient
-      description: >
-        Inscription publique. Le rôle est toujours forcé à "patient" côté serveur —
-        aucun champ "role" n'est accepté dans le body (protection contre l'élévation de privilèges).
+      summary: Créer un compte utilisateur
+      description: Inscription publique. Le rôle par défaut est `user`.
       security: []
       requestBody:
         required: true
@@ -245,21 +108,13 @@ paths:
               $ref: "#/components/schemas/RegisterInput"
       responses:
         "201":
-          description: Compte créé avec succès
+          description: Compte créé
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success: { type: string, example: "User created" }
+                $ref: "#/components/schemas/UserResponse"
         "400":
-          description: Corps de requête invalide (échec de validation Zod)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Échec de la création (ex. email déjà utilisé)
+          description: Corps de requête invalide
           content:
             application/json:
               schema:
@@ -269,9 +124,6 @@ paths:
     post:
       tags: [Auth]
       summary: Se connecter
-      description: >
-        Retourne un access token JWT (15 min) dans le corps de la réponse, et pose
-        un refresh token (30 jours) dans un cookie httpOnly, secure, sameSite=Strict.
       security: []
       requestBody:
         required: true
@@ -281,32 +133,18 @@ paths:
               $ref: "#/components/schemas/LoginInput"
       responses:
         "200":
-          description: Connexion réussie
+          description: Connexion réussie (token + cookie refresh)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/TokenResponse"
-        "400":
-          description: Corps de requête invalide
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: Email ou mot de passe incorrect
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
   /auth/refresh:
     get:
       tags: [Auth]
-      summary: Rafraîchir la session
-      description: >
-        Utilise le refresh token présent dans le cookie httpOnly pour émettre un nouveau
-        couple access/refresh token (rotation). Ne prend aucun paramètre — le token
-        vient uniquement du cookie, jamais du corps ou d'un header.
+      summary: Rafraîchir le token via le refresh cookie
       security: []
       responses:
         "200":
@@ -316,489 +154,110 @@ paths:
               schema:
                 $ref: "#/components/schemas/TokenResponse"
         "401":
-          description: Cookie de refresh token absent ou invalide
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Refresh token révoqué ou ne correspondant pas à l'utilisateur attendu
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          description: Refresh token absent ou invalide
 
   /auth/logout:
     get:
       tags: [Auth]
-      summary: Se déconnecter
-      description: >
-        Révoque le refresh token courant (s'il existe) et vide le cookie associé.
-        Ne nécessite pas de Bearer token — agit uniquement sur le cookie.
+      summary: Se déconnecter (révoque le refresh token)
       security: []
       responses:
         "200":
           description: Déconnexion effectuée
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: string, example: "Logged out" }
 
-  /patients:
+  /tasks:
     get:
-      tags: [Patients]
-      summary: Rechercher des patients par nom et/ou email
-      description: >
-        Réservé aux comptes médecin/admin. Recherche insensible à la casse, "contient"
-        (pas exact), sur prénom OU nom pour `name`, et sur l'email pour `email`.
-        Au moins un des deux paramètres est obligatoire. Résultats plafonnés à 50.
-      parameters:
-        - name: name
-          in: query
-          schema: { type: string }
-          description: Recherche sur le prénom ou le nom de famille
-        - name: email
-          in: query
-          schema: { type: string }
+      tags: [Tasks]
+      summary: Lister les tâches de l'utilisateur courant
       responses:
         "200":
-          description: Liste des patients correspondant aux critères
+          description: Liste de tâches
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/PatientResponse"
-        "400":
-          description: Ni "name" ni "email" fourni
+                  $ref: "#/components/schemas/TaskResponse"
+        "401":
+          description: Token manquant ou invalide
+
+    post:
+      tags: [Tasks]
+      summary: Créer une tâche
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Tâche créée
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Corps invalide
         "401":
           description: Token manquant ou invalide
-        "403":
-          description: Rôle patient non autorisé sur cette route
 
-  /patients/{id}:
+  /tasks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+
     get:
-      tags: [Patients]
-      summary: Récupérer un patient par id
-      description: Réservé aux comptes médecin/admin.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
+      tags: [Tasks]
+      summary: Récupérer une tâche par id (propriété de l'utilisateur)
       responses:
         "200":
-          description: Patient trouvé
+          description: Tâche trouvée
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PatientResponse"
-        "400":
-          description: Id invalide (pas un UUID)
+                $ref: "#/components/schemas/TaskResponse"
         "401":
           description: Token manquant ou invalide
-        "403":
-          description: Rôle patient non autorisé sur cette route
         "404":
-          description: Patient introuvable
+          description: Tâche introuvable
 
     patch:
-      tags: [Patients]
-      summary: Modifier partiellement un patient
-      description: Réservé aux comptes médecin/admin.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
+      tags: [Tasks]
+      summary: Mettre à jour partiellement une tâche
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdatePatientInput"
+              $ref: "#/components/schemas/UpdateTaskInput"
       responses:
         "200":
-          description: Patient mis à jour
+          description: Tâche mise à jour
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PatientResponse"
+                $ref: "#/components/schemas/TaskResponse"
         "400":
-          description: Corps de requête invalide ou vide
+          description: Corps invalide
         "401":
           description: Token manquant ou invalide
-        "403":
-          description: Rôle patient non autorisé sur cette route
         "404":
-          description: Patient introuvable
-        "409":
-          description: L'email fourni est déjà utilisé par un autre compte
+          description: Tâche introuvable
 
     delete:
-      tags: [Patients]
-      summary: Supprimer un patient
-      description: >
-        Réservé aux comptes médecin/admin. Échoue si le patient a des rendez-vous
-        liés (contrainte de clé étrangère, onDelete NoAction).
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
+      tags: [Tasks]
+      summary: Supprimer une tâche
       responses:
         "200":
-          description: Patient supprimé
-        "400":
-          description: Id invalide (pas un UUID)
-        "401":
-          description: Token manquant ou invalide
-        "403":
-          description: Rôle patient non autorisé sur cette route
-        "404":
-          description: Patient introuvable
-        "409":
-          description: Le patient a des rendez-vous liés, suppression refusée
-
-  /doctor:
-    post:
-      tags: [Doctors]
-      summary: Créer un médecin
-      description: Réservé aux comptes médecin/admin.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DoctorInput"
-      responses:
-        "201":
-          description: Médecin créé
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  doctor:
-                    $ref: "#/components/schemas/DoctorResponse"
-        "400":
-          description: Corps de requête invalide
-        "401":
-          description: Token manquant ou invalide
-        "403":
-          description: Rôle patient non autorisé sur cette route
-        "500":
-          description: Échec de la création
-
-  /doctors:
-    get:
-      tags: [Doctors]
-      summary: Lister les médecins
-      description: Accessible à tout utilisateur authentifié.
-      responses:
-        "200":
-          description: Liste des médecins et le nombre total
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  doctors:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/DoctorSummary"
-                  count:
-                    type: integer
-        "401":
-          description: Token manquant ou invalide
-        "500":
-          description: Échec de la récupération
-
-  /doctor/{id}:
-    get:
-      tags: [Doctors]
-      summary: Récupérer un médecin par id
-      description: >
-        Accessible à tout utilisateur authentifié. `date_of_birth` n'est renvoyée que si
-        le médecin consulte sa propre fiche.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: Médecin trouvé
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  doctor:
-                    $ref: "#/components/schemas/DoctorDetail"
+          description: Tâche supprimée
         "401":
           description: Token manquant ou invalide
         "404":
-          description: Médecin introuvable
-        "500":
-          description: Échec de la récupération
+          description: Tâche introuvable
 
-    put:
-      tags: [Doctors]
-      summary: Modifier un médecin
-      description: Réservé au médecin lui-même ou à un admin.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateDoctorInput"
-      responses:
-        "200":
-          description: Médecin mis à jour
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  doctor:
-                    $ref: "#/components/schemas/DoctorResponse"
-        "400":
-          description: Corps de requête invalide
-        "401":
-          description: Token manquant ou invalide
-        "403":
-          description: Non autorisé à modifier ce médecin
-        "404":
-          description: Médecin introuvable
-
-    delete:
-      tags: [Doctors]
-      summary: Supprimer un médecin
-      description: Réservé au médecin lui-même ou à un admin.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: Médecin supprimé
-        "401":
-          description: Token manquant ou invalide
-        "403":
-          description: Non autorisé à supprimer ce médecin
-        "404":
-          description: Médecin introuvable
-
-  /specialty:
-    post:
-      tags: [Specialties]
-      summary: Créer une spécialité
-      description: Réservé aux comptes admin.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SpecialtyInput"
-      responses:
-        "201":
-          description: Spécialité créée
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  specialty:
-                    $ref: "#/components/schemas/SpecialtyResponse"
-        "400":
-          description: Corps de requête invalide
-        "401":
-          description: Token manquant ou invalide
-        "403":
-          description: Rôle non autorisé (réservé admin)
-        "409":
-          description: Une spécialité avec ce nom existe déjà
-
-  /specialties:
-    get:
-      tags: [Specialties]
-      summary: Lister les spécialités
-      description: Accessible à tout utilisateur authentifié.
-      responses:
-        "200":
-          description: Liste des spécialités
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  specialties:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/SpecialtyResponse"
-        "401":
-          description: Token manquant ou invalide
-        "500":
-          description: Échec de la récupération
-
-  /specialty/{id}:
-    get:
-      tags: [Specialties]
-      summary: Récupérer une spécialité par id
-      description: Accessible à tout utilisateur authentifié.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-      responses:
-        "200":
-          description: Spécialité trouvée
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  specialty:
-                    $ref: "#/components/schemas/SpecialtyResponse"
-        "401":
-          description: Token manquant ou invalide
-        "404":
-          description: Spécialité introuvable
-        "500":
-          description: Échec de la récupération
-
-    put:
-      tags: [Specialties]
-      summary: Modifier une spécialité
-      description: Réservé aux comptes admin.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SpecialtyInput"
-      responses:
-        "200":
-          description: Spécialité mise à jour
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  specialty:
-                    $ref: "#/components/schemas/SpecialtyResponse"
-        "400":
-          description: Id invalide, corps invalide, ou aucun champ à modifier
-        "401":
-          description: Token manquant ou invalide
-        "403":
-          description: Rôle non autorisé (réservé admin)
-        "404":
-          description: Spécialité introuvable
-        "409":
-          description: Une spécialité avec ce nom existe déjà
-
-    delete:
-      tags: [Specialties]
-      summary: Supprimer une spécialité
-      description: Réservé aux comptes admin.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer }
-      responses:
-        "200":
-          description: Spécialité supprimée
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  specialty:
-                    $ref: "#/components/schemas/SpecialtyResponse"
-        "400":
-          description: Id invalide
-        "401":
-          description: Token manquant ou invalide
-        "403":
-          description: Rôle non autorisé (réservé admin)
-        "404":
-          description: Spécialité introuvable
-
-  /doctor/{doctorId}/schedules:
-    get:
-      tags: [DoctorSchedules]
-      summary: Lister le planning récurrent d'un médecin
-      description: Accessible à tout utilisateur authentifié.
-      parameters:
-        - name: doctorId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: Planning du médecin
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  schedules:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/DoctorScheduleResponse"
-        "401":
-          description: Token manquant ou invalide
-        "404":
-          description: doctorId manquant
-        "500":
-          description: Échec de la récupération
-
-  /doctor-schedules:
-    post:
-      tags: [DoctorSchedules]
-      summary: Créer une entrée de planning
-      description: Réservé aux comptes médecin/admin.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DoctorScheduleInput"
-      responses:
-        "201":
-          description: Planning créé
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  schedule:
-                    $ref: "#/components/schemas/DoctorScheduleResponse"
-        "400":
-          description: Corps invalide, ou médecin inexistant (contrainte de clé étrangère)
-        "401":
-          description: Token manquant ou invalide
         "403":
           description: Rôle patient non autorisé sur cette route
 

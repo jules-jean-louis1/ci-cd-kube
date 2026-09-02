@@ -1,4 +1,4 @@
-import { RefreshToken, User } from "@prisma/client";
+import { RefreshToken, User, Role } from "@prisma/client";
 import { LoginInput, RegisterInput } from "./auth.dto.js";
 import * as argon2 from "argon2";
 import { prisma } from "../../utils/prisma.js";
@@ -37,7 +37,9 @@ export const registerService = async (data: RegisterInput): Promise<User> => {
  * Récupère un utilisateur par email pour vérifier ses identifiants au login.
  * Le contrôleur se charge ensuite de comparer le mot de passe avec argon2.
  */
-export const loginService = async (data: LoginInput): Promise<User | null> => {
+export const loginService = async (
+  data: LoginInput,
+): Promise<(User & { role?: Role | null }) | null> => {
   return await prisma.user.findUnique({ where: { email: data.email }, include: { role: true } });
 };
 
@@ -88,6 +90,8 @@ export const rotateRefreshToken = async (
     // Use updateMany to avoid throwing if the token was already removed
     await tx.refreshToken.updateMany({ where: { token: oldToken }, data: { revoked: true } });
 
-    return await tx.refreshToken.create({ data: { userId: newData.userId, token: newData.token, expiresAt: newData.expiresAt } });
+    return await tx.refreshToken.create({
+      data: { userId: newData.userId, token: newData.token, expiresAt: newData.expiresAt },
+    });
   });
 };

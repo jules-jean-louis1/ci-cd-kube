@@ -1,4 +1,5 @@
 import { Context } from "hono";
+import type { Role, User } from "@prisma/client";
 import { LoginSchema, RegisterSchema } from "./auth.dto.js";
 import * as authService from "./auth.service.js";
 import { sign, verify } from "hono/jwt";
@@ -56,7 +57,7 @@ export const login = async (c: Context) => {
       return c.json({ error: parsed.error.format() }, 400);
     }
 
-    const user = await authService.loginService(parsed.data);
+    const user = (await authService.loginService(parsed.data)) as (User & { role?: Role | null }) | null;
 
     const invalidMsg = "Invalid email or password";
     if (!user) return c.json({ error: invalidMsg }, 401);
@@ -66,9 +67,9 @@ export const login = async (c: Context) => {
 
     const payloadUser = {
       id: String(user.id),
-      firstname: (user as any).firstname ?? "",
-      lastname: (user as any).lastname ?? "",
-      role: (user as any).role?.name ?? (user as any).role ?? "patient",
+      firstname: user.firstname ?? "",
+      lastname: user.lastname ?? "",
+      role: user.role && typeof user.role === "object" ? user.role.name ?? "user" : (user.role as unknown as string) ?? "user",
     };
 
     const { token, refreshToken } = await createJWT(payloadUser);
@@ -96,10 +97,7 @@ export const login = async (c: Context) => {
 
 export const refreshToken = async (c: Context) => {
   const tokenInCookie = getCookie(c, "refreshToken");
-  const rawHeaders = (c.req as any).headers;
-  const rawCookieHeader = rawHeaders && typeof rawHeaders.get === "function"
-    ? rawHeaders.get("cookie") || rawHeaders.get("set-cookie")
-    : rawHeaders?.cookie || rawHeaders?.["set-cookie"];
+  const rawCookieHeader = c.req.headers.get("cookie") || c.req.headers.get("set-cookie");
 
   // If standard cookie extraction failed, try to extract refreshToken from
   // any cookie-like header (set-cookie, Cookie) using a regex. This makes the
@@ -118,14 +116,19 @@ export const refreshToken = async (c: Context) => {
   if (!token) return c.json({ error: "Unauthorized" }, 401);
 
   try {
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const payload = (await verify(token, JWT_SECRET, "HS256")) as any;
+    const verified = await verify(token, JWT_SECRET, "HS256");
+    const payload = (verified as unknown) as {
+      userId: number | string;
+      firstname?: string;
+      lastname?: string;
+      role?: string;
+    };
     console.debug("refresh payload:", payload);
     const storedToken = await authService.findRefreshToken(token);
     console.debug("storedToken from DB:", storedToken);
 
     // Vérification stricte
-    if (!storedToken || (storedToken as any).revoked || String((storedToken as any).userId) !== String(payload.userId)) {
+    if (!storedToken || storedToken.revoked || String(storedToken.userId) !== String(payload.userId)) {
       return c.json({ error: "Token invalid or revoked" }, 403);
     }
 

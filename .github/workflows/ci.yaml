@@ -39,6 +39,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
 
   format_lint:
     defaults:
@@ -68,6 +69,25 @@ jobs:
 
       - name: TypeCheck
         run: npm run typecheck
+  
+  pr_checks:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run extra security scan
+        run: npm run security:scan
 
   test_api:
     needs: [deps_leak, format_lint]
@@ -120,8 +140,9 @@ jobs:
       - name: Run e2e tests (Cucumber)
         run: npm run test:e2e
 
-  build_api_image:
+  publish_api_image:
     needs: [test_api]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: Production
 

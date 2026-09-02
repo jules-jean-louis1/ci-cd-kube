@@ -21,15 +21,15 @@ export const createTask = async (c: Context) => {
 };
 
 export const getTasks = async (c: Context) => {
-  const user = c.get("user") as any;
+  const user = c.get("user") as unknown as { userId?: string; role?: string } | undefined;
   try {
     if (user && user.role === USER_ROLE.ADMIN) {
       const all = await tasksService.getAllTasks();
       return c.json(all);
     }
 
-    const userId = getUserIdFromContext(c);
-    if (!userId) return c.json({ error: "Unauthorized" }, 401);
+      const userId = getUserIdFromContext(c);
+      if (!userId) return c.json({ error: "Unauthorized" }, 401);
 
     const tasks = await tasksService.getTasksByUser(userId);
     return c.json(tasks);
@@ -47,8 +47,8 @@ export const getTask = async (c: Context) => {
   if (!task) return c.json({ error: "Task not found" }, 404);
 
   const userId = getUserIdFromContext(c);
-  const user = c.get("user") as any;
-  if (user.role !== USER_ROLE.ADMIN && String(task.userId) !== String(userId)) {
+  const user = c.get("user") as unknown as { userId?: string; role?: string } | undefined;
+  if ((user?.role ?? "") !== USER_ROLE.ADMIN && String(task.userId) !== String(userId)) {
     return c.json({ error: "Forbidden" }, 403);
   }
 
@@ -67,8 +67,8 @@ export const updateTask = async (c: Context) => {
   if (!task) return c.json({ error: "Task not found" }, 404);
 
   const userId = getUserIdFromContext(c);
-  const user = c.get("user") as any;
-  if (user.role !== USER_ROLE.ADMIN && String(task.userId) !== String(userId)) {
+  const user = c.get("user") as unknown as { userId?: string; role?: string } | undefined;
+  if ((user?.role ?? "") !== USER_ROLE.ADMIN && String(task.userId) !== String(userId)) {
     return c.json({ error: "Forbidden" }, 403);
   }
 
@@ -89,8 +89,8 @@ export const deleteTask = async (c: Context) => {
   if (!task) return c.json({ error: "Task not found" }, 404);
 
   const userId = getUserIdFromContext(c);
-  const user = c.get("user") as any;
-  if (user.role !== USER_ROLE.ADMIN && String(task.userId) !== String(userId)) {
+  const user = c.get("user") as unknown as { userId?: string; role?: string } | undefined;
+  if ((user?.role ?? "") !== USER_ROLE.ADMIN && String(task.userId) !== String(userId)) {
     return c.json({ error: "Forbidden" }, 403);
   }
 
