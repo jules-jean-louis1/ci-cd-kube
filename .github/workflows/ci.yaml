@@ -121,3 +121,62 @@ jobs:
 
       - name: Run e2e tests (Cucumber)
         run: npm run test:e2e
+
+  build_api_image:
+      needs: [test_api]
+      runs-on: ubuntu-24.04
+      environment: Production
+
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v6
+
+        - name: Log in to Docker Hub
+          uses: docker/login-action@v3
+          with:
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+        - name: Extract metadata (tags, labels) for Docker
+          id: meta
+          uses: docker/metadata-action@v5
+          with:
+            images: ${{ secrets.DOCKERHUB_USERNAME }}/healthsync-api
+
+        - name: Build Docker image for security scan
+          uses: docker/build-push-action@v6
+          with:
+            context: ./api
+            file: ./api/Dockerfile
+            target: production
+            load: true
+            tags: ${{ steps.meta.outputs.tags }}
+            labels: ${{ steps.meta.outputs.labels }}
+
+        - name: Run Trivy vulnerability scanner
+          uses: aquasecurity/trivy-action@v0.29.0
+          with:
+            image-ref: ${{ steps.meta.outputs.tags }}
+            format: "table"
+            exit-code: "1"
+            ignore-unfixed: true
+            vuln-type: "os,library"
+            severity: "CRITICAL,HIGH"
+
+        - name: Push Docker image
+          id: push
+          uses: docker/build-push-action@v6
+          with:
+            context: ./api
+            file: ./api/Dockerfile
+            target: production
+            push: true
+            tags: ${{ steps.meta.outputs.tags }}
+            labels: ${{ steps.meta.outputs.labels }}
+
+        - name: Generate artifact attestation
+          uses: actions/attest-build-provenance@v2
+          with:
+            subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/healthsync-api
+            subject-digest: ${{ steps.push.outputs.digest }}
+            push-to-registry: true
