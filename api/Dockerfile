@@ -41,7 +41,7 @@ ENV NODE_ENV=production
 USER node
 
 COPY --chown=node:node package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 COPY --chown=node:node --from=development /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 COPY --chown=node:node --from=development /usr/src/app/node_modules/@prisma ./node_modules/@prisma
