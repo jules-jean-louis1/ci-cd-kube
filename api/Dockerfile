@@ -1,4 +1,4 @@
-FROM node:22-bullseye AS base
+FROM node:22-bookworm-slim AS base
 LABEL \
     org.opencontainers.image.title="api_healthsync" \
     org.opencontainers.image.licences="MIT"
@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /usr/src/app
 RUN chown node:node /usr/src/app
 
-# --- ÉTAPE 1 : DEVELOPMENT / BUILDER ---
+# DEVELOPMENT
 FROM base AS development
 LABEL org.opencontainers.image.ref.name="dev"
 
@@ -33,7 +33,7 @@ RUN npm run build
 EXPOSE 3000
 CMD [ "dumb-init", "sh", "-c", "npx prisma generate && npm run dev" ]
 
-# --- ÉTAPE 2 : PRODUCTION ---
+# PRODUCTION
 FROM base AS production
 LABEL org.opencontainers.image.ref.name="prod"
 
