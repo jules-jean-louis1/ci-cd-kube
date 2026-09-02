@@ -37,9 +37,10 @@ jobs:
 
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   format_lint:
-    needs: deps_leak
     defaults:
       run:
         working-directory: api
@@ -97,10 +98,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Install grpc-service dependencies
-        run: npm ci
-        working-directory: grpc-service
 
       - name: Create test env file
         run: |
