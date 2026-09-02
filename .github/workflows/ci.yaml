@@ -60,6 +60,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install grpc-service dependencies
+        run: npm ci
+        working-directory: grpc-service
+
       - name: Format
         run: npm run format:check
 
