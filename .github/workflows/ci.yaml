@@ -123,59 +123,65 @@ jobs:
         run: npm run test:e2e
 
   build_api_image:
-      needs: [test_api]
-      runs-on: ubuntu-24.04
-      environment: Production
+    needs: [test_api]
+    runs-on: ubuntu-24.04
+    environment: Production
 
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v6
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
 
-        - name: Log in to Docker Hub
-          uses: docker/login-action@v3
-          with:
-            username: ${{ secrets.DOCKERHUB_USERNAME }}
-            password: ${{ secrets.DOCKERHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-        - name: Extract metadata (tags, labels) for Docker
-          id: meta
-          uses: docker/metadata-action@v5
-          with:
-            images: ${{ secrets.DOCKERHUB_USERNAME }}/healthsync-api
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-        - name: Build Docker image for security scan
-          uses: docker/build-push-action@v6
-          with:
-            context: ./api
-            file: ./api/Dockerfile
-            target: production
-            load: true
-            tags: healthsync-api:local
-            labels: ${{ steps.meta.outputs.labels }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/healthsync-api
 
-        - name: Run Trivy vulnerability scanner
-          uses: aquasecurity/trivy-action@master
-          with:
-            image-ref: healthsync-api:local
-            format: table
-            severity: HIGH,CRITICAL
-            ignore-unfixed: true
-            exit-code: "0"
+      - name: Build Docker image for security scan
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          target: production
+          load: true
+          tags: healthsync-api:local
+          labels: ${{ steps.meta.outputs.labels }}
 
-        - name: Push Docker image
-          id: push
-          uses: docker/build-push-action@v6
-          with:
-            context: ./api
-            file: ./api/Dockerfile
-            target: production
-            push: true
-            tags: ${{ steps.meta.outputs.tags }}
-            labels: ${{ steps.meta.outputs.labels }}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: healthsync-api:local
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
 
-        - name: Generate artifact attestation
-          uses: actions/attest-build-provenance@v2
-          with:
-            subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/healthsync-api
-            subject-digest: ${{ steps.push.outputs.digest }}
-            push-to-registry: true
+      - name: Push Docker image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/healthsync-api
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
