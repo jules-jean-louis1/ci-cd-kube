@@ -56,15 +56,13 @@ export const login = async (c: Context) => {
       return c.json({ error: parsed.error.format() }, 400);
     }
 
-    const user = (await authService.loginService(parsed.data)) as
-      | null
-      | ({
-          id: number;
-          password: string;
-          firstname?: string | null;
-          lastname?: string | null;
-          role?: { id?: number; name?: string } | string | null;
-        });
+    const user = (await authService.loginService(parsed.data)) as null | {
+      id: number;
+      password: string;
+      firstname?: string | null;
+      lastname?: string | null;
+      role?: { id?: number; name?: string } | string | null;
+    };
 
     const invalidMsg = "Invalid email or password";
     if (!user) return c.json({ error: invalidMsg }, 401);
