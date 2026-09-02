@@ -10,7 +10,7 @@ import { prisma } from "../../utils/prisma.js";
  * admin ou medecin (faille de type "mass assignment" / élévation de privilèges).
  * La création de comptes admin/medecin passera par un endpoint protégé dédié.
  */
-export const registerService = async (data: RegisterInput): Promise<any> => {
+export const registerService = async (data: RegisterInput): Promise<unknown> => {
   // Hash du mot de passe avant stockage — jamais de mot de passe en clair en base.
   const hashed = await argon2.hash(data.password);
 
@@ -37,7 +37,7 @@ export const registerService = async (data: RegisterInput): Promise<any> => {
  * Récupère un utilisateur par email pour vérifier ses identifiants au login.
  * Le contrôleur se charge ensuite de comparer le mot de passe avec argon2.
  */
-export const loginService = async (data: LoginInput): Promise<any | null> => {
+export const loginService = async (data: LoginInput): Promise<unknown | null> => {
   return await prisma.user.findUnique({ where: { email: data.email }, include: { role: true } });
 };
 
@@ -49,7 +49,7 @@ export const insertRefreshToken = async (data: {
   userId: number;
   token: string;
   expiresAt: Date;
-}): Promise<any> => {
+}): Promise<unknown> => {
   return await prisma.refreshToken.create({
     data: {
       userId: data.userId,
@@ -63,7 +63,7 @@ export const insertRefreshToken = async (data: {
  * Recherche un refresh token existant à partir de sa valeur brute.
  * Sert à vérifier qu'un token présenté par le client est bien connu et valide.
  */
-export const findRefreshToken = async (token: string): Promise<any | null> => {
+export const findRefreshToken = async (token: string): Promise<unknown | null> => {
   return await prisma.refreshToken.findUnique({ where: { token } });
 };
 
@@ -71,7 +71,7 @@ export const findRefreshToken = async (token: string): Promise<any | null> => {
  * Marque un refresh token comme révoqué (ex. lors d'un logout).
  * Un token révoqué ne peut plus être utilisé pour obtenir un nouvel access token.
  */
-export const revokeRefreshToken = async (token: string): Promise<any> => {
+export const revokeRefreshToken = async (token: string): Promise<unknown> => {
   return await prisma.refreshToken.update({ where: { token }, data: { revoked: true } });
 };
 

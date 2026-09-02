@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, beforeEach } from "vitest";
 import { rateLimit, resetRateLimit } from "../../src/middleware/rateLimit.middleware.js";
 
@@ -9,7 +10,7 @@ describe("rateLimit middleware", () => {
   it("allows requests under the limit", async () => {
     const mw = rateLimit({ limit: 2, windowMs: 10000 });
     const c: any = {
-      req: { header: (n: string) => "1.2.3.4" },
+      req: { header: (_n: string) => "1.2.3.4" },
       json: () => {},
     };
     let called = 0;
@@ -25,7 +26,7 @@ describe("rateLimit middleware", () => {
   it("blocks when over the limit", async () => {
     const mw = rateLimit({ limit: 1, windowMs: 10000 });
     const c: any = {
-      req: { header: (n: string) => "1.2.3.4" },
+      req: { header: (_n: string) => "1.2.3.4" },
       json: (body: any, status: number, headers?: any) => ({ body, status, headers }),
     };
 
