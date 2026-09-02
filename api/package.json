@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
     "dev": "tsx watch src/index.ts",
     "prisma:generate": "prisma generate",
     "test": "dotenv -e ../docker/.env.test -- vitest",
