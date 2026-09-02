@@ -150,13 +150,13 @@ jobs:
             file: ./api/Dockerfile
             target: production
             load: true
-            tags: ${{ steps.meta.outputs.tags }}
+            tags: healthsync-api:local
             labels: ${{ steps.meta.outputs.labels }}
 
         - name: Run Trivy vulnerability scanner
           uses: aquasecurity/trivy-action@master
           with:
-            image-ref: healthsync-api:${{ github.sha }}
+            image-ref: healthsync-api:local
             format: table
             severity: HIGH,CRITICAL
             ignore-unfixed: true
