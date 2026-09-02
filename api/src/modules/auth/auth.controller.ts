@@ -1,5 +1,4 @@
 import { Context } from "hono";
-import type { Role, User } from "@prisma/client";
 import { LoginSchema, RegisterSchema } from "./auth.dto.js";
 import * as authService from "./auth.service.js";
 import { sign, verify } from "hono/jwt";
@@ -57,7 +56,15 @@ export const login = async (c: Context) => {
       return c.json({ error: parsed.error.format() }, 400);
     }
 
-    const user = (await authService.loginService(parsed.data)) as (User & { role?: Role | null }) | null;
+    const user = (await authService.loginService(parsed.data)) as
+      | null
+      | ({
+          id: number;
+          password: string;
+          firstname?: string | null;
+          lastname?: string | null;
+          role?: { id?: number; name?: string } | string | null;
+        });
 
     const invalidMsg = "Invalid email or password";
     if (!user) return c.json({ error: invalidMsg }, 401);
@@ -69,7 +76,10 @@ export const login = async (c: Context) => {
       id: String(user.id),
       firstname: user.firstname ?? "",
       lastname: user.lastname ?? "",
-      role: user.role && typeof user.role === "object" ? user.role.name ?? "user" : (user.role as unknown as string) ?? "user",
+      role:
+        user.role && typeof user.role === "object"
+          ? (user.role.name ?? "user")
+          : ((user.role as unknown as string) ?? "user"),
     };
 
     const { token, refreshToken } = await createJWT(payloadUser);
@@ -97,7 +107,7 @@ export const login = async (c: Context) => {
 
 export const refreshToken = async (c: Context) => {
   const tokenInCookie = getCookie(c, "refreshToken");
-  const rawCookieHeader = c.req.headers.get("cookie") || c.req.headers.get("set-cookie");
+  const rawCookieHeader = c.req.header("cookie") || c.req.header("set-cookie");
 
   // If standard cookie extraction failed, try to extract refreshToken from
   // any cookie-like header (set-cookie, Cookie) using a regex. This makes the
@@ -117,7 +127,7 @@ export const refreshToken = async (c: Context) => {
 
   try {
     const verified = await verify(token, JWT_SECRET, "HS256");
-    const payload = (verified as unknown) as {
+    const payload = verified as unknown as {
       userId: number | string;
       firstname?: string;
       lastname?: string;
@@ -128,16 +138,20 @@ export const refreshToken = async (c: Context) => {
     console.debug("storedToken from DB:", storedToken);
 
     // Vérification stricte
-    if (!storedToken || storedToken.revoked || String(storedToken.userId) !== String(payload.userId)) {
+    if (
+      !storedToken ||
+      storedToken.revoked ||
+      String(storedToken.userId) !== String(payload.userId)
+    ) {
       return c.json({ error: "Token invalid or revoked" }, 403);
     }
 
     // Génération nouvelle paire
     const { token: newToken, refreshToken: newRefreshToken } = await createJWT({
       id: String(payload.userId),
-      firstname: payload.firstname,
-      lastname: payload.lastname,
-      role: payload.role,
+      firstname: payload.firstname ?? "",
+      lastname: payload.lastname ?? "",
+      role: payload.role ?? "user",
     });
     console.debug("generated new tokens");
 

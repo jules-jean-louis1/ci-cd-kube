@@ -28,8 +28,8 @@ export const getTasks = async (c: Context) => {
       return c.json(all);
     }
 
-      const userId = getUserIdFromContext(c);
-      if (!userId) return c.json({ error: "Unauthorized" }, 401);
+    const userId = getUserIdFromContext(c);
+    if (!userId) return c.json({ error: "Unauthorized" }, 401);
 
     const tasks = await tasksService.getTasksByUser(userId);
     return c.json(tasks);
