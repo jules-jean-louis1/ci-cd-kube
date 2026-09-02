@@ -28,7 +28,10 @@ describe("tasks.controller", () => {
   it("createTask returns 400 on invalid body", async () => {
     const c: any = { req: { json: async () => ({}) }, json: jsonSpy };
     await controller.createTask(c as any);
-    expect(jsonSpy).toHaveBeenCalledWith(expect.objectContaining({ error: expect.anything() }), 400);
+    expect(jsonSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ error: expect.anything() }),
+      400,
+    );
   });
 
   it("createTask returns 401 when no user", async () => {
@@ -91,26 +94,42 @@ describe("tasks.controller", () => {
   it("updateTask and deleteTask handle not found/forbidden/success and server error", async () => {
     // update: not found
     (service.findTaskById as any).mockResolvedValue(null);
-    const cUpdateNF: any = { req: { param: () => "1", json: async () => ({ title: "x" }) }, json: jsonSpy, get: () => undefined };
+    const cUpdateNF: any = {
+      req: { param: () => "1", json: async () => ({ title: "x" }) },
+      json: jsonSpy,
+      get: () => undefined,
+    };
     await controller.updateTask(cUpdateNF as any);
     expect(jsonSpy).toHaveBeenCalledWith({ error: "Task not found" }, 404);
 
     // update: forbidden
     (service.findTaskById as any).mockResolvedValue({ id: 1, userId: "9" });
     (getUserIdFromContext as any).mockReturnValue("2");
-    const cUpdateF: any = { req: { param: () => "1", json: async () => ({ title: "x" }) }, json: jsonSpy, get: () => undefined };
+    const cUpdateF: any = {
+      req: { param: () => "1", json: async () => ({ title: "x" }) },
+      json: jsonSpy,
+      get: () => undefined,
+    };
     await controller.updateTask(cUpdateF as any);
     expect(jsonSpy).toHaveBeenCalledWith({ error: "Forbidden" }, 403);
 
     // update: success and service error
     (getUserIdFromContext as any).mockReturnValue("9");
     (service.updateTask as any).mockResolvedValue({ id: 1, title: "ok" });
-    const cUpdateOk: any = { req: { param: () => "1", json: async () => ({ title: "x" }) }, json: jsonSpy, get: () => undefined };
+    const cUpdateOk: any = {
+      req: { param: () => "1", json: async () => ({ title: "x" }) },
+      json: jsonSpy,
+      get: () => undefined,
+    };
     await controller.updateTask(cUpdateOk as any);
     expect(jsonSpy).toHaveBeenCalledWith({ id: 1, title: "ok" });
 
     (service.updateTask as any).mockRejectedValue(new Error("boom"));
-    const cUpdateErr: any = { req: { param: () => "1", json: async () => ({ title: "x" }) }, json: jsonSpy, get: () => undefined };
+    const cUpdateErr: any = {
+      req: { param: () => "1", json: async () => ({ title: "x" }) },
+      json: jsonSpy,
+      get: () => undefined,
+    };
     await controller.updateTask(cUpdateErr as any);
     expect(jsonSpy).toHaveBeenCalledWith({ error: "Internal server error" }, 500);
 

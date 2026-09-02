@@ -18,6 +18,7 @@ export const safeParseInt = (val: unknown): number | null => {
   return null;
 };
 
-export const isNonEmptyString = (s: unknown): boolean => typeof s === "string" && s.trim().length > 0;
+export const isNonEmptyString = (s: unknown): boolean =>
+  typeof s === "string" && s.trim().length > 0;
 
 export default { parseBoolean, safeParseInt, isNonEmptyString };

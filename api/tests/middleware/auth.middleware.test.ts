@@ -51,7 +51,13 @@ describe("auth middleware", () => {
   });
 
   it("forbids when role not allowed", async () => {
-    (verify as any).mockResolvedValue({ userId: "1", firstname: "a", lastname: "b", role: "user", exp: 0 });
+    (verify as any).mockResolvedValue({
+      userId: "1",
+      firstname: "a",
+      lastname: "b",
+      role: "user",
+      exp: 0,
+    });
 
     let response: any = null;
     const c: any = {
@@ -70,7 +76,13 @@ describe("auth middleware", () => {
   });
 
   it("sets user and calls next on success", async () => {
-    (verify as any).mockResolvedValue({ userId: "1", firstname: "a", lastname: "b", role: "user", exp: 0 });
+    (verify as any).mockResolvedValue({
+      userId: "1",
+      firstname: "a",
+      lastname: "b",
+      role: "user",
+      exp: 0,
+    });
 
     const c: any = {
       req: { header: () => "Bearer goodtoken" },
