@@ -42,7 +42,6 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
 
   format_lint:
     defaults:
@@ -72,7 +71,7 @@ jobs:
 
       - name: TypeCheck
         run: npm run typecheck
-  
+
   pr_checks:
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-24.04
@@ -119,6 +118,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
       - name: Install dependencies
         run: npm ci
 
@@ -146,7 +152,7 @@ jobs:
 
   publish_api_image:
     needs: [test_api]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-24.04
     environment: Production
 
@@ -171,6 +177,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/taskmanager-api
+          tags: |
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=tag,prefix=prod-
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build Docker image for security scan
         uses: docker/build-push-action@v6
@@ -208,3 +218,41 @@ jobs:
           subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/taskmanager-api
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+  notify_google_chat:
+    needs: [deps_leak, format_lint, pr_checks, test_api, publish_api_image]
+    if: always()
+    runs-on: ubuntu-24.04
+    env:
+      GOOGLE_CHAT_WEBHOOK: ${{ secrets['GOOGLE_CHAT_WEBHOOK'] }}
+
+    steps:
+      - name: Send pipeline notification
+        if: env.GOOGLE_CHAT_WEBHOOK != ''
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title || 'N/A' }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            status="FAILURE"
+          else
+            status="SUCCESS"
+          fi
+
+          payload=$(jq -n \
+            --arg status "$status" \
+            --arg commit "$COMMIT_SHA" \
+            --arg message "$COMMIT_MESSAGE" \
+            --arg run "$RUN_URL" \
+            '{text: ("Pipeline CI/CD: " + $status + "\nCommit: " + $commit + "\nMessage: " + $message + "\nLogs: " + $run)}')
+
+          curl --fail-with-body -X POST \
+            -H 'Content-Type: application/json; charset=UTF-8' \
+            --data "$payload" \
+            "$GOOGLE_CHAT_WEBHOOK"
+
+      - name: Report missing Google Chat webhook
+        if: env.GOOGLE_CHAT_WEBHOOK == ''
+        run: echo "GOOGLE_CHAT_WEBHOOK is not configured; notification skipped."
