@@ -132,15 +132,13 @@ export const refreshToken = async (c: Context) => {
       role?: string;
     };
     console.debug("refresh payload:", payload);
-    const storedToken = (await authService.findRefreshToken(token)) as
-      | {
-          id?: number;
-          token?: string;
-          userId?: number | string;
-          expiresAt?: Date;
-          revoked?: boolean;
-        }
-      | null;
+    const storedToken = (await authService.findRefreshToken(token)) as {
+      id?: number;
+      token?: string;
+      userId?: number | string;
+      expiresAt?: Date;
+      revoked?: boolean;
+    } | null;
     console.debug("storedToken from DB:", storedToken);
 
     // Vérification stricte
