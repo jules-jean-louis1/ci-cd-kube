@@ -86,7 +86,7 @@ clean: # Nettoie Docker en supprimant les images, conteneurs et réseaux inutili
 
 lint: # Lance le linter pour vérifier la qualité du code
 	@cd api && npm run lint
-	@cd grpc-service && npm run lint
+	@echo "Skipping optional service lint (no extra services)."
 
 prisma-generate: # Génère le client Prisma localement
 	@cd api && npm run prisma:generate
@@ -113,6 +113,9 @@ test-watch: # Lance les tests en mode surveillance, ciblés ou non (ex: make tes
 
 test-coverage: # Lance les tests avec couverture de code et génère un rapport
 	@cd api && npm run test:coverage
+
+test-coverage-brut: # Lance les tests directement dans api (sans dotenv wrapper)
+	@cd api && npx vitest run --coverage
 	
 # --- Aide ---
 

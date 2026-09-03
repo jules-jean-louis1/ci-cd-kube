@@ -12,8 +12,10 @@ export const USER_AVAILABLES_ROLES = [
 
 export type UserRole = (typeof USER_AVAILABLES_ROLES)[number];
 
-export const getUserIdFromContext = (c: any): string | null => {
-  const user = c.get("user");
+import type { Context } from "hono";
+
+export const getUserIdFromContext = (c: Context): string | null => {
+  const user = c.get("user") as unknown as { userId?: string } | undefined;
   if (!user || !user.userId) {
     return null;
   }

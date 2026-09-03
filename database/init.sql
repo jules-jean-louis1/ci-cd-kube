@@ -1,83 +1,93 @@
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Drop existing tables to replace the database completely
+BEGIN;
 
-CREATE TYPE user_role AS ENUM ('admin', 'patient', 'medecin');
-CREATE TYPE appointment_status AS ENUM ('scheduled', 'cancelled', 'completed');
+DROP TABLE IF EXISTS refresh_tokens CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS roles CASCADE;
 
+-- Enable pgcrypto for bcrypt-style hashing (crypt)
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Roles table
+CREATE TABLE roles (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
+-- Users table
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    firstname TEXT NULL,
-    lastname TEXT NULL,
-    email TEXT UNIQUE NOT NULL,
-    phone TEXT NULL,
-    date_of_birth DATE NULL,
-    role user_role NOT NULL,
-    password_hash TEXT NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    id SERIAL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    firstname TEXT,
+    lastname TEXT,
+    phone TEXT,
+    date_of_birth DATE,
+    role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- Refresh tokens (pour support refresh_token)
 CREATE TABLE refresh_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token TEXT UNIQUE NOT NULL,
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    revoked BOOLEAN NOT NULL DEFAULT FALSE
-);
-
-
-CREATE TABLE specialties (
     id SERIAL PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL
+    token TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-CREATE TABLE doctor_specialties (
-    doctor_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    specialty_id INT REFERENCES specialties(id) ON DELETE CASCADE,
-    PRIMARY KEY (doctor_id, specialty_id)
-);
-
-CREATE TABLE doctor_schedules (
+-- Tasks table
+CREATE TABLE tasks (
     id SERIAL PRIMARY KEY,
-    doctor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    day_of_week INT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
-    start_time TIME NOT NULL,
-    end_time TIME NOT NULL,
-    slot_duration INT DEFAULT 30,
-    CONSTRAINT check_times CHECK (start_time < end_time)
+    title TEXT NOT NULL,
+    description TEXT,
+    completed BOOLEAN NOT NULL DEFAULT FALSE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
-CREATE TABLE appointments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    patient_id UUID NOT NULL REFERENCES users(id),
-    doctor_id UUID NOT NULL REFERENCES users(id),
-    start_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    end_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    status appointment_status DEFAULT 'scheduled',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT check_appointment_times CHECK (start_at < end_at)
-);
+-- Seed: roles
+INSERT INTO roles (name) VALUES ('admin'), ('user') ON CONFLICT (name) DO NOTHING;
 
+-- Seed: admin user (hashage effectué côté DB avec crypt()).
+-- Remplacez les mots de passe en clair ci-dessous si vous souhaitez un mot de passe différent.
+INSERT INTO users (email, password, firstname, lastname, phone, date_of_birth, role_id)
+VALUES (
+    'admin@example.com',
+    crypt('ChangeMe123!', gen_salt('bf')),
+    'Admin',
+    'Seed',
+    '0600000000',
+    '1980-01-01',
+    (SELECT id FROM roles WHERE name = 'admin')
+)
+ON CONFLICT (email) DO NOTHING;
 
-CREATE INDEX idx_users_search ON users(lastname, email);
+-- Seed: user
+INSERT INTO users (email, password, firstname, lastname, phone, date_of_birth, role_id)
+VALUES (
+    'user@example.com',
+    crypt('userpass', gen_salt('bf')),
+    'User',
+    'Seed',
+    '0600000001',
+    '1990-01-01',
+    (SELECT id FROM roles WHERE name = 'user')
+)
+ON CONFLICT (email) DO NOTHING;
 
-CREATE INDEX idx_appointments_conflict_check ON appointments(doctor_id, start_at,end_at);
+-- Seed: exemple de tâche pour l'admin
+INSERT INTO tasks (title, description, completed, user_id)
+VALUES (
+    'Tâche initiale',
+    'Tâche créée par le seed',
+    FALSE,
+    (SELECT id FROM users WHERE email = 'admin@example.com')
+)
+ON CONFLICT DO NOTHING;
 
-INSERT INTO users (id, firstname, lastname, email, phone, date_of_birth, role, password_hash) VALUES
-('550e8400-e29b-41d4-a716-446655440000', 'Jean', 'Dupont', 'jean.dupont@example.com', '0601020304', '1985-05-15', 'medecin', 'hash_medecin'),
-('660e8400-e29b-41d4-a716-446655440001', 'Marie', 'Curie', 'marie.curie@example.com', '0605060708', '1990-10-20', 'patient', 'hash_patient');
-
-INSERT INTO specialties (name) VALUES
-('Cardiologie'),
-('Dermatologie');
-
-INSERT INTO doctor_specialties (doctor_id, specialty_id) VALUES
-('550e8400-e29b-41d4-a716-446655440000', 1);
-
-INSERT INTO doctor_schedules (doctor_id, day_of_week, start_time, end_time, slot_duration) VALUES
-('550e8400-e29b-41d4-a716-446655440000', 1, '09:00:00', '17:00:00', 30);
-
-INSERT INTO appointments (patient_id, doctor_id, start_at, end_at, status) VALUES
-('660e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440000', '2026-08-01 10:00:00+02', '2026-08-01 10:30:00+02', 'scheduled');
-
-INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES
-('660e8400-e29b-41d4-a716-446655440001', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9', '2026-08-15 10:00:00');
+COMMIT;

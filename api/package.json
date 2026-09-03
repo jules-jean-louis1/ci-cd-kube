@@ -1,5 +1,5 @@
 {
-  "name": "@healthsync/api",
+  "name": "@taskmanager/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,11 +11,12 @@
     "test": "dotenv -e ../docker/.env.test -- vitest",
     "test:coverage": "dotenv -e ../docker/.env.test -- vitest run --coverage",
     "test:prisma": "node prisma-test.js",
-    "test:e2e": "dotenv -e ../docker/.env.test -- node --import tsx ./node_modules/@cucumber/cucumber/bin/cucumber.js",
+    "test:e2e": "NODE_ENV=test dotenv -e ../docker/.env.test -- node --import tsx ./node_modules/@cucumber/cucumber/bin/cucumber.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "security:scan": "npm audit --audit-level=moderate || true",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
