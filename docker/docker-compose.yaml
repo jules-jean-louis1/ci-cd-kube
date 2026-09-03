@@ -18,7 +18,7 @@ services:
     volumes:
       - taskmanager_data:/var/lib/postgresql/data
       - ../database/:/docker-entrypoint-initdb.d/:ro
-  
+
   database-test:
     image: postgres:17.2-alpine
     environment:
@@ -60,6 +60,24 @@ services:
     networks:
       - taskmanager
 
+  react:
+    build:
+      context: ../frontend/
+      target: development
+      dockerfile: Dockerfile
+    depends_on:
+      database:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - "${FRONTEND_PORT:-3001}:8080"
+    networks:
+      - taskmanager
+
 networks:
   taskmanager:
     driver: bridge
@@ -68,4 +86,3 @@ volumes:
   taskmanager_data:
   api_node_modules:
   taskmanager_data_test:
-  grpc_service_node_modules:
