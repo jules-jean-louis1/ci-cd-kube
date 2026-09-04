@@ -11,7 +11,7 @@ import { swaggerUI } from "@hono/swagger-ui";
 import path from "path";
 import { fileURLToPath } from "url";
 import { readFileSync } from "fs";
-import { html } from 'hono/html'
+import { html } from "hono/html";
 
 const app = new Hono();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -39,7 +39,9 @@ app.get("/", (c) =>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Taskmanager API</title>
       </head>
-      <body>Hello!</body>
+      <body>
+        Hello!
+      </body>
     </html>
   `),
 );
@@ -48,7 +50,6 @@ app.get("/", (c) =>
 app.get("/swagger.yaml", (c) => c.text(swaggerYaml, 200, { "Content-Type": "application/yaml" }));
 app.get("/docs", swaggerUI({ url: "/swagger.yaml" }));
 
-  
 const authRateLimit =
   process.env.NODE_ENV === "test"
     ? createMiddleware(async (_c, next) => next())
