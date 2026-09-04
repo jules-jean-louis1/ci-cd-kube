@@ -1,0 +1,11 @@
+services:
+  api:
+    build:
+      context: ../api/
+      target: production 
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}?schema=public
+    ports:
+      - "${API_PORT:-8080}:3000"

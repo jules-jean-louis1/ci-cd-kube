@@ -11,39 +11,44 @@ import { swaggerUI } from "@hono/swagger-ui";
 import path from "path";
 import { fileURLToPath } from "url";
 import { readFileSync } from "fs";
+import { html } from 'hono/html'
 
 const app = new Hono();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const swaggerYaml = readFileSync(path.resolve(__dirname, "../swagger.yaml"), "utf-8");
 app.use(logger());
-// Headers de sécurité HTTP (OWASP A05). X-Content-Type-Options, X-Frame-Options et
-// Strict-Transport-Security sont déjà activés par défaut par ce middleware.
-// La CSP autorise cdn.jsdelivr.net, utilisé par la Swagger UI (/docs) pour ses assets.
+
 app.use(
   secureHeaders({
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      // 'unsafe-inline' nécessaire : la Swagger UI (@hono/swagger-ui) injecte son
-      // script d'initialisation en inline, pas de nonce/hash disponible côté lib.
-      // Accepté car /docs ne sert que de la documentation publique, aucune donnée sensible.
       scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
       styleSrc: ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https://cdn.jsdelivr.net"],
     },
   }),
 );
-app.get("/", (c) => c.text("OK"));
+
+app.get("/health", (c) => c.json({ status: "OK" }, 200));
+app.get("/", (c) =>
+  c.html(html`
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Taskmanager API</title>
+      </head>
+      <body>Hello!</body>
+    </html>
+  `),
+);
 
 // Documentation API (Swagger/OpenAPI) — publique, pas d'authentification requise.
 app.get("/swagger.yaml", (c) => c.text(swaggerYaml, 200, { "Content-Type": "application/yaml" }));
 app.get("/docs", swaggerUI({ url: "/swagger.yaml" }));
 
-// Auth
-// Rate limiting (OWASP A04) : fenêtre glissante de 5 requêtes / 15 min par IP sur
-// les endpoints sensibles, pour limiter le brute force sur les mots de passe et la
-// création massive de comptes. Désactivé en environnement de test : la suite
-// d'intégration enchaîne de nombreux register/login depuis la même origine, et le
-// middleware est couvert par son propre fichier de test dédié.
+  
 const authRateLimit =
   process.env.NODE_ENV === "test"
     ? createMiddleware(async (_c, next) => next())
