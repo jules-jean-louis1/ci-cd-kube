@@ -40,7 +40,7 @@ app.get("/", (c) =>
         <title>Taskmanager API</title>
       </head>
       <body>
-        Hello!
+        Hello World!
       </body>
     </html>
   `),
