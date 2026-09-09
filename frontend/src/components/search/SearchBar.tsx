@@ -1,8 +1,8 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandDialog,
@@ -11,10 +11,10 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command"
+} from "@/components/ui/command";
 
 export function SearchBar() {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(false);
 
   return (
     <div className="flex flex-col gap-4">
@@ -36,5 +36,5 @@ export function SearchBar() {
         </Command>
       </CommandDialog>
     </div>
-  )
+  );
 }
