@@ -1,71 +1,19 @@
 services:
-  database:
-    image: postgres:17.2-alpine
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-taskmanager}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-taskmanager}"]
-      interval: 10s
-      retries: 5
-      start_period: 30s
-      timeout: 10s
-    networks:
-      - taskmanager
-    ports:
-      - "${POSTGRES_PORT:-5433}:5432"
-    volumes:
-      - taskmanager_data:/var/lib/postgresql/data
-      - ../database/:/docker-entrypoint-initdb.d/:ro
-  
-  database-test:
-    image: postgres:17.2-alpine
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB_TEST:-taskmanager_test}
-      POSTGRES_USER: ${POSTGRES_USER_TEST:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_TEST:-postgres}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_TEST:-taskmanager_test}"]
-      interval: 10s
-      retries: 5
-      start_period: 30s
-      timeout: 10s
-    networks:
-      - taskmanager
-    ports:
-      - "${POSTGRES_PORT_TEST:-5434}:5432"
-    volumes:
-      - taskmanager_data_test:/var/lib/postgresql/data
-      - ../database/:/docker-entrypoint-initdb.d/:ro
-
-  api:
+  react:
     build:
-      context: ../api/
+      context: ../frontend/
       target: development
       dockerfile: Dockerfile
-    depends_on:
-      database:
-        condition: service_healthy
     env_file:
       - .env
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}?schema=public
+      VITE_API_URL: http://localhost:3000
     ports:
-      - "${API_PORT:-3000}:3000"
-    volumes:
-      - ../api:/usr/src/app
-      - api_node_modules:/usr/src/app/node_modules
+      - "${FRONTEND_PORT:-3001}:3001"
     networks:
-      - taskmanager
+      - ci-cd-kube
 
 networks:
-  taskmanager:
+  ci-cd-kube:
     driver: bridge
-
-volumes:
-  taskmanager_data:
-  api_node_modules:
-  taskmanager_data_test:
-  grpc_service_node_modules:
