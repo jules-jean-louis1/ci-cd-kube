@@ -220,9 +220,23 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Set up Kubectl
+        env:
+          KUBE_SERVER: ${{ secrets.KUBE_SERVER }}
+          KUBE_CA_CERT: ${{ secrets.KUBE_CA_CERT }}
+          KUBE_TOKEN: ${{ secrets.KUBE_SERVICE_ACCOUNT_TOKEN }}
         run: |
           mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          printf '%s' "$KUBE_CA_CERT" | base64 --decode > "$RUNNER_TEMP/kube-ca.crt"
+          kubectl config set-cluster deploy-cluster \
+            --server="$KUBE_SERVER" \
+            --certificate-authority="$RUNNER_TEMP/kube-ca.crt" \
+            --embed-certs=true
+          kubectl config set-credentials github-deployer --token="$KUBE_TOKEN"
+          kubectl config set-context deploy-context \
+            --cluster=deploy-cluster \
+            --user=github-deployer \
+            --namespace=default
+          kubectl config use-context deploy-context
 
       - name: Deploy with Kubectl
         run: |
