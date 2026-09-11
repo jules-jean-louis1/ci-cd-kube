@@ -255,7 +255,10 @@ jobs:
 
       - name: Deploy with Kubectl
         run: |
-          kubectl apply -f ./k8s/
+          kubectl apply \
+            -f ./k8s/deployment.yaml \
+            -f ./k8s/service.yaml \
+            -f ./k8s/ingress.yaml
 
       - name: Update frontend image & verify deployment
         run: |
