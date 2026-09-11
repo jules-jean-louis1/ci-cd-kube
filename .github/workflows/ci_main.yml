@@ -1,271 +1,318 @@
 name: build, test and deploy
 
 on:
-    push:
-        branches:
-            - main
-        tags:
-            - "v*"
-    pull_request:
-        branches:
-            - main
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+
+permissions: 
+  contents: read
+  packages: read
 
 jobs:
-    deps_leak:
-        defaults:
-            run:
-                shell: bash
-                working-directory: frontend
+  deps_leak:
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
 
-        runs-on: ubuntu-24.04
-        steps:
-            - uses: actions/checkout@v6
-              with:
-                  fetch-depth: 0
-                  fetch-tags: true
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 22
-                  cache: npm
-                  cache-dependency-path: frontend/package-lock.json
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-            - name: Install dependencies
-              run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-            - name: Check dependencies
-              run: npm audit
+      - name: Check dependencies
+        run: npm audit
 
-            - name: Run Gitleaks
-              uses: gitleaks/gitleaks-action@v2
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    format_lint:
-        defaults:
-            run:
-                working-directory: frontend
-
-        runs-on: ubuntu-24.04
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v6
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 22
-                  cache: npm
-                  cache-dependency-path: frontend/package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
-
-            - name: Format
-              run: npm run format:check
-
-            - name: Lint
-              run: npm run lint
-
-            - name: TypeCheck
-              run: npm run typecheck
-
-    pr_checks:
-        if: github.event_name == 'pull_request' && github.base_ref == 'main'
-        runs-on: ubuntu-24.04
-        defaults:
-            run:
-                working-directory: frontend
-        steps:
-            - uses: actions/checkout@v6
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 22
-                  cache: npm
-                  cache-dependency-path: frontend/package-lock.json
-            - name: Install dependencies
-              run: npm ci
-            - name: Run extra security scan
-              run: npm run security:scan
-
-    test_frontend:
-        needs: [deps_leak, format_lint]
-        runs-on: ubuntu-24.04
-
-        defaults:
-            run:
-                working-directory: frontend
-
-        steps:
-            - uses: actions/checkout@v6
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 22
-                  cache: npm
-                  cache-dependency-path: frontend/package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
-
-            - name: Run tests
-              run: npm run test
-
-            - name: Install Playwright browser
-              run: npx playwright install --with-deps chromium
-
-            - name: Run end-to-end tests (Playwright)
-              timeout-minutes: 2
-              run: npm run test:e2e
-
-    publish_frontend_image:
-        needs: [test_frontend]
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
-        runs-on: ubuntu-24.04
-        environment: Production
-
-        permissions:
-            packages: write
-            contents: read
-            attestations: write
-            id-token: write
-
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v6
-
-            - name: Log in to Docker Hub
-              uses: docker/login-action@v3
-              with:
-                  username: ${{ secrets.DOCKERHUB_USERNAME }}
-                  password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-            - name: Extract metadata (tags, labels) for Docker
-              id: meta
-              uses: docker/metadata-action@v5
-              with:
-                  images: ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend
-                  tags: |
-                      type=raw,value=prod,enable=${{ github.ref == 'refs/heads/main' }}
-                      type=ref,event=tag,prefix=prod-
-                      type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
-
-            - name: Build Docker image for security scan
-              uses: docker/build-push-action@v6
-              with:
-                  context: ./frontend
-                  file: ./frontend/Dockerfile
-                  target: production
-                  load: true
-                  tags: ci-cd-frontend:local
-                  labels: ${{ steps.meta.outputs.labels }}
-
-            - name: Run Trivy vulnerability scanner
-              uses: aquasecurity/trivy-action@master
-              with:
-                  image-ref: ci-cd-frontend:local
-                  format: table
-                  severity: HIGH,CRITICAL
-                  ignore-unfixed: true
-                  exit-code: "1"
-
-            - name: Push Docker image
-              id: push
-              uses: docker/build-push-action@v6
-              with:
-                  context: ./frontend
-                  file: ./frontend/Dockerfile
-                  target: production
-                  push: true
-                  tags: ${{ steps.meta.outputs.tags }}
-                  labels: ${{ steps.meta.outputs.labels }}
-
-            - name: Generate artifact attestation
-              uses: actions/attest-build-provenance@v2
-              with:
-                  subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend
-                  subject-digest: ${{ steps.push.outputs.digest }}
-                  push-to-registry: true
-
-    deploy:
-        needs: [publish_frontend_image]
-        runs-on: ubuntu-24.04
-
-        steps:
-            - uses: actions/checkout@v6
-
-            - name: Set up Kubectl
-              run: |
-                  mkdir -p $HOME/.kube
-                  echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
-
-            - name: Deploy with Kubectl
-              run: |
-                  kubectl apply -f ./k8s/
-
-            - name: Update frontend image & verify deployment
-              run: |
-                  if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-                    image_tag="prod-${GITHUB_REF_NAME}"
-                  else
-                    image_tag="prod"
-                  fi
-
-                  kubectl set image deployment/frontend-deployment \
-                    frontend="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend:${image_tag}"
-                  kubectl rollout status deployment/frontend-deployment --timeout=300s
-
-            - name: Verify service
-              run: |
-                  kubectl get svc frontend
-
-    notify_google_chat:
-        needs:
-            [
-                deps_leak,
-                format_lint,
-                pr_checks,
-                test_frontend,
-                publish_frontend_image,
-                deploy,
-            ]
-        if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
-        runs-on: ubuntu-24.04
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
         env:
-            GOOGLE_CHAT_WEBHOOK: ${{ secrets['GOOGLE_CHAT_WEBHOOK'] }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-        steps:
-            - name: Send pipeline notification
-              if: env.GOOGLE_CHAT_WEBHOOK != ''
-              continue-on-error: true
-              env:
-                  COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title || 'N/A' }}
-                  COMMIT_SHA: ${{ github.sha }}
-                  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-                  NEEDS_JSON: ${{ toJSON(needs) }}
-              run: |
-                  failed_jobs=$(jq -r '
-                    to_entries[]
-                    | select(.value.result == "failure" or .value.result == "cancelled")
-                    | .key
-                  ' <<< "$NEEDS_JSON" | paste -sd ', ' -)
+  format_lint:
+    defaults:
+      run:
+        working-directory: frontend
 
-                  payload=$(jq -n \
-                    --arg status "FAILURE" \
-                    --arg jobs "${failed_jobs:-unknown}" \
-                    --arg commit "$COMMIT_SHA" \
-                    --arg message "$COMMIT_MESSAGE" \
-                    --arg run "$RUN_URL" \
-                    '{text: ("Pipeline CI/CD: " + $status + "\nJobs en échec: " + $jobs + "\nCommit: " + $commit + "\nMessage: " + $message + "\nLogs: " + $run)}')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-                  curl --fail-with-body -X POST \
-                    -H 'Content-Type: application/json; charset=UTF-8' \
-                    --data "$payload" \
-                    "$GOOGLE_CHAT_WEBHOOK"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-            - name: Report missing Google Chat webhook
-              if: env.GOOGLE_CHAT_WEBHOOK == ''
-              run: echo "Pipeline en échec, mais GOOGLE_CHAT_WEBHOOK n'est pas configuré."
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: TypeCheck
+        run: npm run typecheck
+
+  pr_checks:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run extra security scan
+        run: npm run security:scan
+
+  unit_test_frontend:
+    needs: [deps_leak, format_lint]
+    runs-on: ubuntu-24.04
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test
+
+  e2e_test_frontend:
+    needs: [deps_leak, format_lint]
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: npx playwright install --with-deps "${{ matrix.browser }}"
+
+      - name: Run end-to-end tests (Playwright)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        timeout-minutes: 2
+        run: npx playwright test --project="${{ matrix.browser }}"
+
+  publish_frontend_image:
+    needs: [unit_test_frontend, e2e_test_frontend]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-24.04
+    environment: Production
+
+    permissions:
+      packages: write
+      contents: read
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend
+          tags: |
+            type=raw,value=prod,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=tag,prefix=prod-
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+
+      - name: Build Docker image for security scan
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          target: production
+          load: true
+          tags: ci-cd-frontend:local
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ci-cd-frontend:local
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Push Docker image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: index.docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+  deploy:
+    needs: [publish_frontend_image]
+    runs-on: ubuntu-24.04
+    permissions: 
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Kubectl
+        env:
+          KUBE_SERVER: ${{ secrets.KUBE_SERVER }}
+          KUBE_CA_CERT: ${{ secrets.KUBE_CA_CERT }}
+          KUBE_TOKEN: ${{ secrets.KUBE_SERVICE_ACCOUNT_TOKEN }}
+        run: |
+          mkdir -p $HOME/.kube
+          printf '%s' "$KUBE_CA_CERT" | base64 --decode > "$RUNNER_TEMP/kube-ca.crt"
+          kubectl config set-cluster deploy-cluster \
+            --server="$KUBE_SERVER" \
+            --certificate-authority="$RUNNER_TEMP/kube-ca.crt" \
+            --embed-certs=true
+          kubectl config set-credentials github-deployer --token="$KUBE_TOKEN"
+          kubectl config set-context deploy-context \
+            --cluster=deploy-cluster \
+            --user=github-deployer \
+            --namespace=default
+          kubectl config use-context deploy-context
+
+      - name: Deploy with Kubectl
+        run: |
+          kubectl apply -f ./k8s/
+
+      - name: Update frontend image & verify deployment
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            image_tag="prod-${GITHUB_REF_NAME}"
+          else
+            image_tag="prod"
+          fi
+
+          kubectl set image deployment/frontend-deployment \
+            frontend="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend:${image_tag}"
+          kubectl rollout status deployment/frontend-deployment --timeout=300s
+
+      - name: Verify service
+        run: |
+          kubectl get svc frontend
+
+  notify_google_chat:
+    needs:
+      [
+        deps_leak,
+        format_lint,
+        pr_checks,
+        unit_test_frontend,
+        e2e_test_frontend,
+        publish_frontend_image,
+        deploy,
+      ]
+    if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-24.04
+    env:
+      GOOGLE_CHAT_WEBHOOK: ${{ secrets['GOOGLE_CHAT_WEBHOOK'] }}
+
+    steps:
+      - name: Send pipeline notification
+        if: env.GOOGLE_CHAT_WEBHOOK != ''
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title || 'N/A' }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          failed_jobs=$(jq -r '
+            to_entries[]
+            | select(.value.result == "failure" or .value.result == "cancelled")
+            | .key
+          ' <<< "$NEEDS_JSON" | paste -sd ', ' -)
+
+          payload=$(jq -n \
+            --arg status "FAILURE" \
+            --arg jobs "${failed_jobs:-unknown}" \
+            --arg commit "$COMMIT_SHA" \
+            --arg message "$COMMIT_MESSAGE" \
+            --arg run "$RUN_URL" \
+            '{text: ("Pipeline CI/CD: " + $status + "\nJobs en échec: " + $jobs + "\nCommit: " + $commit + "\nMessage: " + $message + "\nLogs: " + $run)}')
+
+          curl --fail-with-body -X POST \
+            -H 'Content-Type: application/json; charset=UTF-8' \
+            --data "$payload" \
+            "$GOOGLE_CHAT_WEBHOOK"
+
+      - name: Report missing Google Chat webhook
+        if: env.GOOGLE_CHAT_WEBHOOK == ''
+        run: echo "Pipeline en échec, mais GOOGLE_CHAT_WEBHOOK n'est pas configuré."
