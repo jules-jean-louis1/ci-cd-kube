@@ -141,11 +141,15 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps ${{ matrix.browser}}
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: npx playwright install --with-deps "${{ matrix.browser }}"
 
       - name: Run end-to-end tests (Playwright)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
         timeout-minutes: 2
-        run: npm run test:e2e
+        run: npx playwright test --project="${{ matrix.browser }}"
 
   publish_frontend_image:
     needs: [unit_test_frontend, e2e_test_frontend]
