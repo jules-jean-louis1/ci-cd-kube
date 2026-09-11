@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { BookOpen } from "lucide-react";
 import { SearchBar } from "../search/SearchBar";
+import { ModeToggle } from "../ui/toggle-mode";
 
 export const Header = () => {
   return (
@@ -28,6 +29,7 @@ export const Header = () => {
         </nav>
         <div className="flex items-center gap-2">
           <SearchBar />
+          <ModeToggle />
         </div>
       </div>
     </header>
