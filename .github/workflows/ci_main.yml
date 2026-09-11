@@ -267,6 +267,7 @@ jobs:
 
           kubectl set image deployment/frontend-deployment \
             frontend="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend:${image_tag}"
+          kubectl rollout restart deployment/frontend-deployment
           kubectl rollout status deployment/frontend-deployment --timeout=300s
 
       - name: Verify service
