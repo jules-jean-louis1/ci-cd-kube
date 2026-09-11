@@ -69,21 +69,38 @@ export const HomePage = () => {
       </section>
 
       <section id="enjeux" className="mt-20 scroll-mt-24 border-t pt-12">
-        <p className="text-sm font-medium text-primary">Pourquoi ce projet ?</p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight">Automatiser avec intention</h2>
+        <p className="text-sm font-medium text-primary">Les enjeux</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+          Livrer plus souvent sans perdre le contrôle
+        </h2>
+        <p className="mt-4 max-w-3xl leading-7 text-muted-foreground">
+          Sans automatisation, une équipe finit par choisir entre attendre des mois pour livrer avec
+          moins de risques ou publier vite en acceptant davantage de régressions. L’idée d’un
+          pipeline CI/CD est de sortir de ce dilemme : chaque changement est vérifié au plus tôt,
+          puis livré par un processus reproductible.
+        </p>
         <div className="mt-7 grid gap-8 md:grid-cols-3">
           <Insight
             title="Réduire le risque"
-            text="Chaque modification passe par les mêmes contrôles avant d’atteindre un environnement partagé."
+            text="Les mêmes contrôles sont rejoués sur chaque proposition de merge, avant qu’un changement n’atteigne un environnement partagé."
           />
           <Insight
             title="Détecter tôt"
-            text="Le shift left rapproche les tests et les scans de sécurité du moment où le code est écrit."
+            text="Le shift left rapproche le lint, les tests et les scans de sécurité du moment où le code est écrit, quand le problème coûte encore peu à corriger."
           />
           <Insight
-            title="Travailler en équipe"
-            text="Des règles de branches et des feedbacks rapides rendent la livraison plus prévisible."
+            title="Mesurer la livraison"
+            text="Les métriques DORA donnent un langage commun : fréquence de déploiement, délai d’exécution, taux d’échec et temps de rétablissement."
           />
+        </div>
+        <div className="mt-10 border-t pt-8">
+          <h3 className="font-semibold">Pourquoi suivre ces métriques ?</h3>
+          <p className="mt-2 max-w-3xl leading-7 text-muted-foreground">
+            Les travaux présentés dans <em>Accelerate</em> montrent qu’une livraison fréquente et
+            fiable va de pair avec de meilleures performances. Les métriques DORA ne servent pas à
+            mettre les équipes en compétition : elles permettent de voir où le flux ralentit et si
+            les changements arrivent en production sans augmenter le nombre d’incidents.
+          </p>
         </div>
       </section>
 
