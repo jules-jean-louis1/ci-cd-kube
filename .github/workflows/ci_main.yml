@@ -236,7 +236,12 @@ jobs:
           KUBE_TOKEN: ${{ secrets.KUBE_SERVICE_ACCOUNT_TOKEN }}
         run: |
           mkdir -p $HOME/.kube
-          printf '%s' "$KUBE_CA_CERT" | base64 --decode > "$RUNNER_TEMP/kube-ca.crt"
+          if [[ "$KUBE_CA_CERT" == -----BEGIN* ]]; then
+            printf '%s\n' "$KUBE_CA_CERT" > "$RUNNER_TEMP/kube-ca.crt"
+          else
+            printf '%s' "$KUBE_CA_CERT" | base64 --decode > "$RUNNER_TEMP/kube-ca.crt"
+          fi
+          openssl x509 -in "$RUNNER_TEMP/kube-ca.crt" -noout
           kubectl config set-cluster deploy-cluster \
             --server="$KUBE_SERVER" \
             --certificate-authority="$RUNNER_TEMP/kube-ca.crt" \
