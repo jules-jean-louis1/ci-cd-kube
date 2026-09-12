@@ -236,6 +236,7 @@ jobs:
     name: Deploy to Kubernetes
     needs: [publish_frontend_image]
     runs-on: ubuntu-24.04
+    environment: Production
     permissions: 
       contents: read
 
@@ -246,7 +247,7 @@ jobs:
         run: |
           kubectl apply -f k8s/ \
           --server="${{ secrets.KUBE_SERVER }}" \
-          --token="${{ secrets.KUBE_TOKEN }}" \
+          --token="${{ secrets.KUBE_SERVICE_ACCOUNT_TOKEN }}" \
           --certificate-authority=<(echo "${{ secrets.KUBE_CA_CERT }}" | base64 -d)
       - name: Restart frontend deployment
         run: |
