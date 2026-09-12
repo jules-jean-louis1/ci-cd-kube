@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   deps_leak:
+    name: Dependencies and secrets scan
     defaults:
       run:
         shell: bash
@@ -47,6 +48,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   format_lint:
+    name: Format, lint and type-check
     defaults:
       run:
         working-directory: frontend
@@ -76,6 +78,7 @@ jobs:
         run: npm run typecheck
 
   pr_checks:
+    name: Pull request security checks
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-24.04
     defaults:
@@ -95,7 +98,7 @@ jobs:
         run: npm run security:scan
 
   unit_test_frontend:
-    needs: [deps_leak, format_lint]
+    name: Frontend unit tests
     runs-on: ubuntu-24.04
 
     defaults:
@@ -119,7 +122,8 @@ jobs:
         run: npm run test
 
   e2e_test_frontend:
-    needs: [deps_leak, format_lint]
+    name: Frontend E2E tests (${{ matrix.browser }})
+    needs: [deps_leak, format_lint, unit_test_frontend]
     strategy:
       matrix:
         browser: [chromium, firefox, webkit]
@@ -152,6 +156,7 @@ jobs:
         run: npx playwright test --project="${{ matrix.browser }}"
 
   publish_frontend_image:
+    name: Build and publish frontend image
     needs: [unit_test_frontend, e2e_test_frontend]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-24.04
@@ -179,7 +184,7 @@ jobs:
         with:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend
           tags: |
-            type=raw,value=prod,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=prod,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') }}
             type=ref,event=tag,prefix=prod-
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
 
@@ -192,6 +197,8 @@ jobs:
           load: true
           tags: ci-cd-frontend:local
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -212,6 +219,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
@@ -221,6 +230,7 @@ jobs:
           push-to-registry: true
 
   deploy:
+    name: Deploy to Kubernetes
     needs: [publish_frontend_image]
     runs-on: ubuntu-24.04
     permissions: 
@@ -229,52 +239,72 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Kubectl
-        env:
-          KUBE_SERVER: ${{ secrets.KUBE_SERVER }}
-          KUBE_CA_CERT: ${{ secrets.KUBE_CA_CERT }}
-          KUBE_TOKEN: ${{ secrets.KUBE_SERVICE_ACCOUNT_TOKEN }}
+      - name: Deploy manifests to Kubernetes
         run: |
-          mkdir -p $HOME/.kube
-          if [[ "$KUBE_CA_CERT" == -----BEGIN* ]]; then
-            printf '%s\n' "$KUBE_CA_CERT" > "$RUNNER_TEMP/kube-ca.crt"
-          else
-            printf '%s' "$KUBE_CA_CERT" | base64 --decode > "$RUNNER_TEMP/kube-ca.crt"
-          fi
-          openssl x509 -in "$RUNNER_TEMP/kube-ca.crt" -noout
-          kubectl config set-cluster deploy-cluster \
-            --server="$KUBE_SERVER" \
-            --certificate-authority="$RUNNER_TEMP/kube-ca.crt" \
-            --embed-certs=true
-          kubectl config set-credentials github-deployer --token="$KUBE_TOKEN"
-          kubectl config set-context deploy-context \
-            --cluster=deploy-cluster \
-            --user=github-deployer \
-            --namespace=default
-          kubectl config use-context deploy-context
-
-      - name: Deploy with Kubectl
+          kubectl apply -f k8s/ \
+          --server="${{ secrets.KUBE_SERVER }}" \
+          --token="${{ secrets.KUBE_TOKEN }}" \
+          --certificate-authority=<(echo "${{ secrets.KUBE_CA_CERT }}" | base64 -d)
+      - name: Restart frontend deployment
         run: |
-          kubectl apply -f k8s/frontend/
-
-      - name: Update frontend image & verify deployment
+          kubectl rollout restart deployment/frontend-deployment \
+            --server="${{ secrets.KUBE_SERVER }}" \
+            --token="${{ secrets.KUBE_TOKEN }}" \
+            --certificate-authority=<(echo "${{ secrets.KUBE_CA_CERT }}" | base64 -d)
+      - name: Wait for frontend rollout
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            image_tag="prod-${GITHUB_REF_NAME}"
-          else
-            image_tag="prod"
-          fi
-
-          kubectl set image deployment/frontend-deployment \
-            frontend="docker.io/${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-frontend:${image_tag}"
-          kubectl rollout restart deployment/frontend-deployment
-          kubectl rollout status deployment/frontend-deployment --timeout=300s
-
+          kubectl rollout status deployment/frontend-deployment \
+            --server="${{ secrets.KUBE_SERVER }}" \
+            --token="${{ secrets.KUBE_TOKEN }}" \
+            --certificate-authority=<(echo "${{ secrets.KUBE_CA_CERT }}" | base64 -d) \
+            --timeout=120s
       - name: Verify service
         run: |
-          kubectl get svc frontend
+          kubectl get svc frontend \
+            --server="${{ secrets.KUBE_SERVER }}" \
+            --token="${{ secrets.KUBE_TOKEN }}" \
+            --certificate-authority=<(echo "${{ secrets.KUBE_CA_CERT }}" | base64 -d)
+
+      - name: Run smoke test
+        run: |
+          chmod +x ./scripts/healthCheck.sh
+          ./scripts/healthCheck.sh
+
+  post_deploy_smoke_test:
+    name: Post-deployment browser smoke test
+    needs: [deploy]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Test deployed frontend
+        env:
+          BASE_URL: https://etudiant-04-web.development.atelier.ovh
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/ms-playwright
+        timeout-minutes: 2
+        run: npx playwright test --project=chromium
 
   notify_google_chat:
+    name: Notify Google Chat
     needs:
       [
         deps_leak,
@@ -284,6 +314,7 @@ jobs:
         e2e_test_frontend,
         publish_frontend_image,
         deploy,
+        post_deploy_smoke_test,
       ]
     if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
     runs-on: ubuntu-24.04
