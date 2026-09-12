@@ -25,7 +25,7 @@ export const Sidebar = () => {
         <p className="mb-2 mt-7 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Comprendre
         </p>
-        <NavLink className={linkClassName} to="/#architecture">
+        <NavLink className={linkClassName} to="/architecture">
           <Workflow className="size-4" /> Architecture <ChevronRight className="ml-auto size-3" />
         </NavLink>
         <NavLink className={linkClassName} to="/#branches">
