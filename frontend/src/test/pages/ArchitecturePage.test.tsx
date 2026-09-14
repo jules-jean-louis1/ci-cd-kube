@@ -7,7 +7,7 @@ describe("Architecture page", () => {
     render(<ArchitecturePage />);
 
     expect(
-      screen.getByRole("heading", { name: "Du commit à l’application en ligne" }),
+      screen.getByRole("heading", { name: "Du commit à l’application en ligne ???? ERROR" }),
     ).toBeInTheDocument();
   });
 });
