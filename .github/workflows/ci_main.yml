@@ -318,33 +318,23 @@ jobs:
     steps:
       - name: Send pipeline notification
         if: env.GOOGLE_CHAT_WEBHOOK != ''
-        continue-on-error: true
         env:
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          NEEDS_JSON: ${{ toJSON(needs) }}
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<< "$NEEDS_JSON" >/dev/null; then
-            status="FAILURE"
-            status_icon="🔴"
-          else
-            status="SUCCESS"
-            status_icon="🟢"
-          fi
+          jq -n \
+            --argjson needs "$NEEDS" \
+            --arg author "$GITHUB_ACTOR" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '($needs | to_entries | map(select(.value.result != "success" and .value.result != "skipped"))) as $failed
+            | {text: (
+                "CI/CD: " + (if $failed == [] then "SUCCESS" else "FAILURE" end) + "\n"
+                + "Auteur: " + $author + "\n"
+                + (if $failed == [] then ""
+                   else "Jobs en échec: " + ($failed | map("\(.key) (\(.value.result))") | join(", ")) + "\n"
+                      + "Pipeline: " + $run_url
+                   end)
+              )}' > payload.json
 
-          affected_jobs=$(jq -r '
-            to_entries[]
-            | select(.value.result == "failure" or .value.result == "cancelled")
-            | .key
-          ' <<< "$NEEDS_JSON" | paste -sd ', ' -)
-
-          payload=$(jq -n \
-            --arg status "$status" \
-            --arg icon "$status_icon" \
-            --arg jobs "${affected_jobs:-Aucun}" \
-            --arg run "$RUN_URL" \
-            '{text: ($icon + " Pipeline CI/CD : " + $status + "\nJob(s) en échec : " + $jobs + "\nCommit : " + $commit + "\nPipeline : " + $run)}')
-
-          curl --fail-with-body -X POST \
-            -H 'Content-Type: application/json; charset=UTF-8' \
-            --data "$payload" \
-            "$GOOGLE_CHAT_WEBHOOK"
+          curl -sS --fail-with-body -X POST "$GOOGLE_CHAT_WEBHOOK" \
+            -H 'Content-Type: application/json' \
+            --data @payload.json
