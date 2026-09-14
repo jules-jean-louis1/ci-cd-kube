@@ -9,6 +9,9 @@ services:
     environment:
       NODE_ENV: development
       VITE_API_URL: http://localhost:3000
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
     ports:
       - "${FRONTEND_PORT:-3001}:3001"
     networks:
