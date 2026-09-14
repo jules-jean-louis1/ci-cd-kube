@@ -10,7 +10,7 @@ const linkClassName = ({ isActive }: { isActive: boolean }) =>
 
 export const Sidebar = () => {
   return (
-    <aside className="hidden w-64 shrink-0 border-r lg:block">
+    <aside className="app-sidebar hidden w-64 shrink-0 border-r lg:block">
       <nav
         className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto px-5 py-8"
         aria-label="Navigation principale"

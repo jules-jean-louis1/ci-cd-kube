@@ -3,33 +3,36 @@ import { buttonVariants } from "@/components/ui/button";
 
 export const HomePage = () => {
   return (
-    <article id="accueil" className="mx-auto max-w-4xl px-6 py-12 sm:px-10 sm:py-16">
-      <div className="mb-10 flex items-center gap-2 text-sm text-muted-foreground">
-        <span>Accueil</span>
-        <ArrowRight className="size-3" />
-        <span className="text-foreground">Vue d’ensemble</span>
+    <article id="accueil" className="home-page mx-auto max-w-6xl px-6 py-10 sm:px-10 sm:py-14">
+      <div className="mb-8 flex items-center gap-2 text-sm text-muted-foreground">
+        <span>Accueil</span><ArrowRight className="size-3" /><span className="text-foreground">Vue d’ensemble</span>
       </div>
 
-      <header className="max-w-3xl">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-widest text-primary">
-          Documentation du projet
-        </p>
-        <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-          Comprendre et construire un pipeline CI/CD
-        </h1>
-        <p className="mt-6 text-lg leading-8 text-muted-foreground">
-          ci-cd-kube présente le chemin complet qui transforme un commit en application déployée sur
-          Kubernetes : tester, construire, sécuriser, publier et déployer.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <a className={buttonVariants()} href="#parcours">
-            Découvrir le parcours <ArrowRight />
-          </a>
-          <a className={buttonVariants({ variant: "outline" })} href="#architecture">
-            Voir l’architecture
-          </a>
+      <header className="home-hero">
+        <div className="hero-copy">
+          <p className="section-kicker mb-5">Documentation du projet · 2026</p>
+          <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-6xl">
+            Du commit<br /><em>à la prod.</em>
+          </h1>
+          <p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">
+            Le guide visuel de ci-cd-kube pour comprendre comment un changement devient une application fiable sur Kubernetes.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-4">
+            <a className={buttonVariants()} href="#parcours">Découvrir le parcours <ArrowRight /></a>
+            <a className={buttonVariants({ variant: "outline" })} href="#architecture">Voir l’architecture</a>
+          </div>
+        </div>
+        <div className="hero-stamp" aria-label="Résumé du pipeline">
+          <div className="stamp-ring"><Rocket className="size-9" /></div>
+          <span className="stamp-label">CI / CD</span>
+          <strong>READY<br />TO SHIP</strong>
+          <span className="stamp-line">TEST · SECURE · DEPLOY</span>
         </div>
       </header>
+
+      <div className="stat-ribbon" aria-label="Résumé du projet">
+        <span><strong>04</strong> étapes clés</span><span><strong>01</strong> workflow principal</span><span><strong>∞</strong> feedback rapide</span>
+      </div>
 
       <section id="parcours" className="mt-20 scroll-mt-24">
         <div className="mb-7">
@@ -40,7 +43,7 @@ export const HomePage = () => {
             livraison.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="step-grid grid gap-4 sm:grid-cols-2">
           <Step
             icon={GitBranch}
             number="01"
@@ -120,9 +123,9 @@ function Step({
   text: string;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-5 shadow-sm">
+    <div className="step-card rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex items-center justify-between text-primary">
-        <Icon className="size-5" />
+        <span className="step-icon"><Icon className="size-5" /></span>
         <span className="text-xs font-semibold tracking-wider text-muted-foreground">{number}</span>
       </div>
       <h3 className="mt-8 font-semibold">{title}</h3>
