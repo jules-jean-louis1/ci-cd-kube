@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - "v*"
+      - "v*.*.*"
   pull_request:
     branches:
       - main
@@ -309,18 +309,8 @@ jobs:
 
   notify_google_chat:
     name: Notify Google Chat
-    needs:
-      [
-        deps_leak,
-        format_lint,
-        pr_checks,
-        unit_test_frontend,
-        e2e_test_frontend,
-        publish_frontend_image,
-        deploy,
-        post_deploy_smoke_test,
-      ]
-    if: always() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    needs: [deps_leak, format_lint, pr_checks, unit_test_frontend, e2e_test_frontend, publish_frontend_image, deploy, post_deploy_smoke_test]
+    if: always()
     runs-on: ubuntu-24.04
     env:
       GOOGLE_CHAT_WEBHOOK: ${{ secrets['GOOGLE_CHAT_WEBHOOK'] }}
@@ -330,30 +320,31 @@ jobs:
         if: env.GOOGLE_CHAT_WEBHOOK != ''
         continue-on-error: true
         env:
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title || 'N/A' }}
-          COMMIT_SHA: ${{ github.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
-          failed_jobs=$(jq -r '
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<< "$NEEDS_JSON" >/dev/null; then
+            status="FAILURE"
+            status_icon="🔴"
+          else
+            status="SUCCESS"
+            status_icon="🟢"
+          fi
+
+          affected_jobs=$(jq -r '
             to_entries[]
             | select(.value.result == "failure" or .value.result == "cancelled")
             | .key
           ' <<< "$NEEDS_JSON" | paste -sd ', ' -)
 
           payload=$(jq -n \
-            --arg status "FAILURE" \
-            --arg jobs "${failed_jobs:-unknown}" \
-            --arg commit "$COMMIT_SHA" \
-            --arg message "$COMMIT_MESSAGE" \
+            --arg status "$status" \
+            --arg icon "$status_icon" \
+            --arg jobs "${affected_jobs:-Aucun}" \
             --arg run "$RUN_URL" \
-            '{text: ("Pipeline CI/CD: " + $status + "\nJobs en échec: " + $jobs + "\nCommit: " + $commit + "\nMessage: " + $message + "\nLogs: " + $run)}')
+            '{text: ($icon + " Pipeline CI/CD : " + $status + "\nJob(s) en échec : " + $jobs + "\nCommit : " + $commit + "\nPipeline : " + $run)}')
 
           curl --fail-with-body -X POST \
             -H 'Content-Type: application/json; charset=UTF-8' \
             --data "$payload" \
             "$GOOGLE_CHAT_WEBHOOK"
-
-      - name: Report missing Google Chat webhook
-        if: env.GOOGLE_CHAT_WEBHOOK == ''
-        run: echo "Pipeline en échec, mais GOOGLE_CHAT_WEBHOOK n'est pas configuré."
