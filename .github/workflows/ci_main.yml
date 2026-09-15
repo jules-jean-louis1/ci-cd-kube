@@ -320,19 +320,22 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           EVENT_TYPE: ${{ github.event_name == 'pull_request' && 'PR' || 'PUSH' }}
+          PR_URL: ${{ github.event.pull_request.html_url || '' }}
         run: |
           jq -n \
             --argjson needs "$NEEDS" \
             --arg author "$GITHUB_ACTOR" \
             --arg event "$EVENT_TYPE" \
+            --arg pr_url "$PR_URL" \
             --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             '($needs | to_entries | map(select(.value.result != "success" and .value.result != "skipped"))) as $failed
             | {text: (
                 "CI/CD: " + (if $failed == [] then "SUCCESS" else "FAILURE" end) + "\n"
                 + "Événement: " + $event + "\n"
                 + "Auteur: " + $author + "\n"
+                + (if $pr_url == "" then "" else "PR: " + $pr_url + "\n" end)
                 + (if $failed == [] then ""
-                   else "Jobs en échec: " + ($failed | map("\(.key) (\(.value.result))") | join(", ")) + "\n"
+                   else "Jobs failed: " + ($failed | map("\(.key) (\(.value.result))") | join(", ")) + "\n"
                       + "Pipeline: " + $run_url
                    end)
               )}' > payload.json
