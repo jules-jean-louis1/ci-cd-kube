@@ -21,9 +21,15 @@ export const Header = () => {
           <span className="brand-name">ci-cd-kube</span>
         </Link>
         <nav className="header-nav hidden items-center gap-2 text-sm text-muted-foreground md:flex">
-          <a className="rounded-full px-4 py-2 text-foreground" href="#accueil">Accueil</a>
-          <a className="rounded-full px-4 py-2" href="#parcours">Parcours</a>
-          <a className="rounded-full px-4 py-2" href="#enjeux">Enjeux</a>
+          <a className="rounded-full px-4 py-2 text-foreground" href="#accueil">
+            Accueil
+          </a>
+          <a className="rounded-full px-4 py-2" href="#parcours">
+            Parcours
+          </a>
+          <a className="rounded-full px-4 py-2" href="#enjeux">
+            Enjeux
+          </a>
         </nav>
         <div className="flex items-center gap-2">
           <SearchBar />

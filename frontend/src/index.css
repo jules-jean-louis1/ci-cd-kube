@@ -140,7 +140,9 @@ body {
 
 .header-nav a {
   border-bottom: 2px solid transparent;
-  transition: border-color 160ms ease, color 160ms ease;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease;
 }
 
 .header-nav a:hover {
@@ -165,7 +167,10 @@ body {
 .app-sidebar nav a {
   border-left: 3px solid transparent;
   border-radius: 0 var(--radius) var(--radius) 0;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
     transform 160ms ease;
 }
 
@@ -317,7 +322,10 @@ article h1 {
   min-height: 10.5rem;
   border-color: oklch(0.72 0.1 166 / 55%) !important;
   box-shadow: none !important;
-  transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
 }
 
 .step-card:hover {
