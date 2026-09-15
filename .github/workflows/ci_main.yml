@@ -234,7 +234,6 @@ jobs:
 
   deploy:
     name: Deploy to Kubernetes
-    needs: [publish_frontend_image]
     runs-on: ubuntu-24.04
     environment: Production
     permissions: 
@@ -320,14 +319,17 @@ jobs:
         if: env.GOOGLE_CHAT_WEBHOOK != ''
         env:
           NEEDS: ${{ toJSON(needs) }}
+          EVENT_TYPE: ${{ github.event_name == 'pull_request' && 'PR' || 'PUSH' }}
         run: |
           jq -n \
             --argjson needs "$NEEDS" \
             --arg author "$GITHUB_ACTOR" \
+            --arg event "$EVENT_TYPE" \
             --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             '($needs | to_entries | map(select(.value.result != "success" and .value.result != "skipped"))) as $failed
             | {text: (
                 "CI/CD: " + (if $failed == [] then "SUCCESS" else "FAILURE" end) + "\n"
+                + "Événement: " + $event + "\n"
                 + "Auteur: " + $author + "\n"
                 + (if $failed == [] then ""
                    else "Jobs en échec: " + ($failed | map("\(.key) (\(.value.result))") | join(", ")) + "\n"
