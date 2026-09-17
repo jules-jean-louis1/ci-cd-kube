@@ -4,7 +4,7 @@ import { Sidebar } from "./Sidebar";
 
 export const AppLayout = () => {
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground antialiased">
+    <div className="app-shell min-h-screen bg-background font-sans text-foreground antialiased">
       <Header />
       <div className="mx-auto flex max-w-7xl">
         <Sidebar />
